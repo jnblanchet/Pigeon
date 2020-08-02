@@ -1,130 +1,52 @@
 clear
 clc
 close all
-%% loop through rotations to model several scenarios
-X = [];
-lbl = [];
-for angle = -90 : 2.5 : 90
+load model.mat
+for trainingSample = 1:100
     %% load data
-    random_scale_factor = (rand(1)+0.5).^3;
-    f = im2double(rgb2gray(imread('test2.png')));
-    f = imresize(f,random_scale_factor);
-    f = imrotate(f,angle,'nearest','loose');
+    output = sprintf('data/synthetic/code%05d.jpg',trainingSample);
+    outputgt = sprintf('data/synthetic/gt%05d.jpg',trainingSample);
+    f = im2double(rgb2gray(imread(output)));
     figure(1), imshow(f), title('input frame');    
     imshow(f);
-    
+
+    %% preprocessing: eliminate regions without big white padding area
+    candidatefilter_small = imresize(imresize(imresize(f,[400,400]),[200,200]),[100,100]);
+    candidatefilter = imdilate(candidatefilter_small,ones(3));
+    candidatefilter = candidatefilter.^3;
+    candidatefilter = imfilter(candidatefilter,ones(3)/9);
+%     candidatefilter = candidatefilter > graythresh(candidatefilter);
+    f = f .* imresize(candidatefilter,size(f));
+    imshow(f);
+        
+%         imshow(candidatefilter);
+%         imshow(candidatefilter - candidatefilter_small,[])
+%         
     %% extract features
     BLOCK_SIZE = 30;
-    B = extractBarCodeFeatures(f,BLOCK_SIZE);
+    [B,O,theta] = extractBarCodeFeatures(f,BLOCK_SIZE);
     montage(B)
-    
+        
     %% analyse features using groundtruth: build a model
-    gt = imread('test2_gt.png');
-    gt = imresize(gt,random_scale_factor,'nearest');
-    gt = imrotate(gt,angle,'nearest','loose');
+    gt = imread(outputgt)>0;
     isBarcodeBlock = blockproc(gt,[BLOCK_SIZE BLOCK_SIZE],@(x) max(x.data(:)));
-    X = [X;reshape(B,size(B,1)*size(B,2),size(B,3))];
-    lbl = [lbl;reshape(isBarcodeBlock>0,[],1)];
-end
-% is linear regression enough?
-M = X \ lbl;
-score = X * M; % eval
-% imshow(reshape(score,size(B,1),size(B,2)),[])
-% x = 0:0.01:1;
-x = 0:0.01:1;
-figure(2)
-clf
-h1 = histogram(score(logical(lbl)),x);
-x_ = h1.BinEdges(1:end-1) - (h1.BinEdges(2) - h1.BinEdges(1))/2;
-h1 = h1.Values / sum(h1.Values);
-h2 = histogram(score(~logical(lbl)),x);
-h2 = h2.Values / sum(h2.Values);
-plot(x_, h1);
-hold on
-plot(x_, h2);
-hold off
-T = 0.15;
-
-
-%% generalize on new data
-% S = 0;
-for angle = -90 : 1 : 90
-    random_scale_factor = (rand(1)+0.75).^2;
-    f = imresize(im2double(rgb2gray(imread('test3.png'))),random_scale_factor);
-    f = imrotate(f,angle,'nearest','loose');
-    figure(1), imshow(f), title(['input frame ' num2str(size(f,2)) ' x ' num2str(size(f,1))]);
-    
-    %load gt for debug
-    gt = rgb2gray(imread('test3_gt.png'));
-    gt = imresize(gt,random_scale_factor,'nearest');
-    gt = imrotate(gt,angle,'nearest','loose');
-    isBarcodeBlock = logical(blockproc(gt,[BLOCK_SIZE BLOCK_SIZE],@(x) max(x.data(:))));
-
-    
-    %% extract featuress
-    [B,O,theta,mag] = extractBarCodeFeatures(f,BLOCK_SIZE);
-    [bx,by,~] = size(B);
-    figure(2), montage(B), title('features');
+    [bx,by] = size(isBarcodeBlock);
     B = reshape(B,size(B,1)*size(B,2),size(B,3));
     O = reshape(O,size(O,1)*size(O,2),size(O,3));
-    
+    lbl = reshape(isBarcodeBlock>0,[],1);
     
     %% classify
     score = B * M; % eval
     
-    % propagate scores spatially
-    score = reshape(score,bx,by);
-    score = imdilate(score,ones(3)) + score;
-    imshow(score,[])
-    score = score
-    
-    %     valid = score > T;
+    % valid = score > T;
     valid = score > prctile(score(:),93); % from optimization process
-
-%% optimize threshold
-%     f1 = [];
-%     PERCTS = 80:0.25:99;
-%     for PERC = PERCTS
-%     score = B * M; % eval
-% %     valid = score > T;
-%     valid = score > prctile(score(:),PERC); % adaptive?
-%     assert(sum(valid(:)) > 10, 'threshold found no possible code in this frame');
-%     
-%     tp = isBarcodeBlock(:) & valid;
-%     precision = sum(tp) ./ sum(isBarcodeBlock(:));
-%     recall = sum(tp) ./ sum(valid);
-%     f1(end+1) = 2 / (1/precision + 1/recall);
-%     end
-%     plot(f1)
-%     [~,tmp] = max(f1);
-%     title(['best rank is r' num2str(PERCTS(tmp))])
-% %     pause
-% 
-%     end
-%     S = S + f1;
-%     end
-
-%         plot(S)
-%     [~,tmp] = max(S);
-%     title(['best rank is r' num2str(PERCTS(tmp))])
-    
-    
-    % remove outliers using orientation
-    % centroid = mean(O(valid,:));
-    % weights = score(valid);
-    % centroid = sum(O(valid,:) .* weights) / sum(weights);
-    % valid(valid) = (vecnorm(O(valid,:) - centroid,2,2)) < 0.25;
-    
-    % [~,direction] = max(O(valid,:),[],2);
-    % consensus = mode(direction);
-    % valid(valid) = direction == consensus;
-    
+        
     % have the strongest 10 vote
     [~,direction] = max(O(valid,:),[],2);
     valid_scores = score(valid);
     [~,top] = sort(valid_scores,'descend');
     T_strongest_scores = valid_scores(top(10));
-    consensus = mode(direction(valid_scores > T_strongest_scores));
+    consensus = mode(direction(valid_scores > T_strongest_scores)); % TODO: need to scan all promising angles (for multiple codes)
     valid(valid) = direction == consensus;
     
     O(valid(top),:)
@@ -136,7 +58,7 @@ for angle = -90 : 1 : 90
     valid = reshape(valid,bx,by);
     valid_ = double(imresize(valid, size(f,[1 2]),'nearest'));
     score = reshape(score,bx,by);
-
+% 
 %     figure(3)
 %     
 %     subplot(2,2,1)
@@ -176,15 +98,18 @@ for angle = -90 : 1 : 90
             
             % find bars
             stats = regionprops(barcandidates,'Centroid','Orientation','Area','Eccentricity','PixelIdxList');
+            fprintf('%d regions after initial detection.\n',numel(stats));
             if numel(stats) < MIN_BAR_CODES
                 continue;
             end
+            % eliminate things that aren't bars
+            stats([stats.Eccentricity] < 0.8) = [];
+            fprintf('%d regions after Eccentricity filtering.\n',numel(stats));
             % eliminate huge regions
             A = [stats.Area];
             regular_bar_size_estimate = median(A);
-            stats(A > 2 * regular_bar_size_estimate | A < regular_bar_size_estimate / 4) = [];
-            % eliminate things that aren't bars
-            stats([stats.Eccentricity] < 0.8) = [];
+            stats(A > 2.5 * regular_bar_size_estimate | A < regular_bar_size_estimate / 4) = [];
+            fprintf('%d regions after Area filtering.\n',numel(stats));
             % get centers
             centers = reshape([stats.Centroid],2,[]);
             % get orientation
@@ -196,9 +121,11 @@ for angle = -90 : 1 : 90
             % keep only the ones closely related vertically
             med = median(rotated_centers(2,:));
             ditrib = abs(rotated_centers(2,:) - med);
-            tolerance = mean(ditrib);
-            remove = ditrib > tolerance * 2;
+%             tolerance = mean(ditrib) * 2.5;
+            tolerance = std(ditrib(ditrib < mean(ditrib) * 2.5))*3;
+            remove = ditrib > tolerance;
             stats(remove) = [];
+            fprintf('%d regions after vertial grouping filter.\n',numel(stats));
             
             % remove the ones that are far left or far right
             rotated_centers = rot(90-orientation)' * reshape([stats.Centroid],2,[]);
@@ -207,6 +134,7 @@ for angle = -90 : 1 : 90
             tolerance = mean(skip);
             remove = skip > (tolerance * 1.5);
             stats(ids(remove)) = [];
+            fprintf('%d regions after horizontal grouping filter.\n',numel(stats));
             
             if numel(stats) <= 40% this is for debug only, find codes that are "kind of" well detected
                 continue;
@@ -222,13 +150,15 @@ for angle = -90 : 1 : 90
             scatter(rotated_centers(1,:),rotated_centers(2,:))
             axis('equal')
             title('if there are still outliers at this point, we need to filter horizontally');
-            subplot(1,2,2);
+            subplot(2,2,2);
             imshow(f < barthresh & valid_d_large)
             hold on
             scatter(centers(1,:),centers(2,:),'filled')
             hold off
             title(num2str(numel(stats)));
-            pause
+            subplot(2,2,4);
+            imshow(f)
+%             pause
             debugfound = true;
             
             % i think the best way to go here is to try to find the small bars
@@ -271,6 +201,7 @@ for angle = -90 : 1 : 90
         end
         % pause
     end
-    assert(debugfound,'couldn''t locate code');
+    pause
+%     assert(debugfound,'couldn''t locate code');
 
 end

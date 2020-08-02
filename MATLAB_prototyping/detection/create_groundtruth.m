@@ -2,8 +2,8 @@
 
 f = imread('test3.png');
 
-figure(1)
 imshow(f);
+figure(1)
 title('crop out the bar code region')
 r = getrect();
 r = round(r);
