@@ -8,14 +8,14 @@ function [hist,oriented_hist,theta,mag] = extractBarCodeFeatures(f,BLOCK_SIZE)
     gy = imfilter(f,hy,'replicate');
     
     % theta = atan2(gy,(gx+eps));
-    theta = atan(gy ./(gx+eps));
+    theta = atan2(gy,(gx+eps));
     mag = (abs(gy) + abs(gx));
     
-    N_BINS = 12;
-    bins = floor((theta + pi/2) / (pi) * (N_BINS-1));
-
+    N_BINS = 20;
+    bins = floor((theta + pi) / (2*pi+eps) * (N_BINS));
+figure(100), imshow((mag>0.07 & mag<0.25))
     for b=N_BINS-1:-1:0
-        hist(:,:,b+1) = blockproc(double(bins==b).*(mag>0.5),[BLOCK_SIZE BLOCK_SIZE],@(x) sum(x.data,[1 2]));
+        hist(:,:,b+1) = blockproc(double(bins==b).*(mag>0.07 & mag<0.25),[BLOCK_SIZE BLOCK_SIZE],@(x) sum(x.data,[1 2]));
     end
     
     hist = hist / max(hist(:));
