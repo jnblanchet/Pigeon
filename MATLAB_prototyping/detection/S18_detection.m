@@ -10,7 +10,7 @@ for angle = -90 : 2.5 : 90
     f = im2double(rgb2gray(imread('test2.png')));
     f = imresize(f,random_scale_factor);
     f = imrotate(f,angle,'nearest','loose');
-    figure(1), imshow(f), title('input frame');    
+    figure(1), imshow(f), title('input frame');
     imshow(f);
     
     %% extract features

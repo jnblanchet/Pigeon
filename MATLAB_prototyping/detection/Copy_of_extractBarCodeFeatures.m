@@ -41,7 +41,6 @@ function [hist,grid_x,grid_y] = extractBarCodeFeatures(f,BLOCK_SIZE,SCALE_FACT)
                     b1 = floor((pi + colorphase(px_x+1,px_y+1,1)) ./ (2*pi) * (N_BINS_P1-1));
                     b2 = floor((pi/2 + colorphase(px_x+1,px_y+1,2)) ./ (pi) * (N_BINS_P2-1));
                     b = b1 + b2 * N_BINS_P1;
-                    hist(cell_x+1,cell_y+1,b+1) = hist(cell_x+1,cell_y+1,b+1) + 1;
                     % repeat for gy
                     b1 = floor((pi + colorphase(px_x+1,px_y+1,3)) ./ (2*pi) * (N_BINS_P1-1));
                     b2 = floor((pi/2 + colorphase(px_x+1,px_y+1,4)) ./ (pi) * (N_BINS_P2-1));
@@ -55,5 +54,5 @@ function [hist,grid_x,grid_y] = extractBarCodeFeatures(f,BLOCK_SIZE,SCALE_FACT)
     maxbin = 30;
     hist = hist(:,:,1:maxbin);
     
-    hist = hist / (2*BLOCK_SIZE*BLOCK_SIZE);
+    hist = hist / (BLOCK_SIZE*BLOCK_SIZE);
 end

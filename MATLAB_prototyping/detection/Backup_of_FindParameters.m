@@ -5,8 +5,7 @@ load model.mat
 
 % load reallbl.mat
 % gtstruct = table2cell(gTruth.LabelData);% realdata
-% path = 'C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real\';
-path = 'C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\';
+path = 'C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real\';
 % path = 'C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real_diffcam\';
 % path = 'C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\dark1\';
 
@@ -17,10 +16,9 @@ for trainingSample = 1:numel(images)
     output = sprintf('data/real/code%05d.jpg',trainingSample);
     output = [path filesep images(trainingSample).name];
     f = im2double(imread(output));         
-    tic
     %% extract features
     BLOCK_SIZE = 5;
-    SCALE_FACT = 8;
+    SCALE_FACT = 4;
     [H,bx,by] = extractBarCodeFeatures(f,BLOCK_SIZE,SCALE_FACT);
     H = reshape(H,size(H,1)*size(H,2),size(H,3));
     
@@ -28,8 +26,8 @@ for trainingSample = 1:numel(images)
     score = H * M; % eval
     score = reshape(score,bx,by);
     score = (score - min(score(:))) / (max(score(:)) - min(score(:)));
-    valid = score > prctile(score(:),96);
-    valid = bwmorph(valid,'clean');
+    valid = score > prctile(score(:),99);
+    
     
     %% crop
     [R,xp] = radon(valid); % where 1 col = 1 deg from 0 to 179
@@ -81,11 +79,6 @@ for trainingSample = 1:numel(images)
     balance = balance ./ mean(balance);
     imbar = imbar ./ balance;
     
-    toc
-    imshow(imbar)
-    pause(0.5)
-    continue
-    
     %% Re-run pipeline at a higher resolution
 %     BLOCK_SIZE = 10;
 %     SCALE_FACT = 1;
@@ -98,23 +91,6 @@ for trainingSample = 1:numel(images)
     red_ratio = @(im) (2*im(:,:,1)) - (im(:,:,2) + im(:,:,3));
     score = red_ratio(imbar);
     score = (score - min(score(:))) / (max(score(:)) - min(score(:)));
-    
-    
-    % until we figure out the rest (live video feed will help determine the success rate)
-    % we will simply return the centroid for user feedback
-    
-%     [R,xp] = radon(valid); % where 1 col = 1 deg from 0 to 179
-%     imshow(R,[])
-    
-    toc
-%     score = adapthisteq(score);
-    figure(1)
-    subplot(2,1,1)
-    imshow(score,[])
-    subplot(2,1,2)
-    imshow(adapthisteq(score))
-    pause
-    continue
 %     score = imtophat(score,true(11,21));
     
     hx = [-ones(1,3) -1:0.5:1 ones(1,3)]';
@@ -141,23 +117,8 @@ for trainingSample = 1:numel(images)
             break;
         end
     end
-    
-    valid = top | bottom;
-    valid = imdilate(valid,true(5,11));
-    barcodeCandidatesRegions = regionprops(valid,'Area','BoundingBox');
-    
-    [area,id] = max([barcodeCandidatesRegions.Area]);
-    
-    % check if area meets a threshold
-    bb = round(barcodeCandidatesRegions(id).BoundingBox);
-    
-    toc
-    
-    figure(1)
-    subplot(2,1,1)
-    imshow(score(bb(2):bb(2)+bb(4),bb(1):bb(1)+bb(3)),[])
-    subplot(2,1,2)
-    imshow(imbar)
+    imshow([top_;bottom_;top_|bottom_],[])
+
     pause
     continue
     
