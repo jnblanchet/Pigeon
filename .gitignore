@@ -1,2 +1,8 @@
 /MATLAB_prototyping/data
 /MATLAB_prototyping/documents
+/MATLAB_prototyping/samples_web_assembly_lib
+/MATLAB_prototyping/samples_data_web_assembly_lib
+/MATLAB_prototyping/libs18c/build
+/MATLAB_prototyping/libs18c/dist
+*.mat
+/JS_prototyping
