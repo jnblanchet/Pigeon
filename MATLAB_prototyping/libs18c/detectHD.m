@@ -7,7 +7,7 @@ function [s18ccode,boundingbox] = detectHD(frame) %#codegen
 % b = frame(:,:,3)';
 % frame = [r(:)';g(:)';b(:)';z(:)'];
 % frame = reshape(frame,[ 4, 1920, 1080 ]);
-
+% 
     %DETECT Locates, reads and parses an S18C code from 
     % Specify the Dimensions and Data Types
     % define some regionprops info for compilation
@@ -46,7 +46,7 @@ function [s18ccode,boundingbox] = detectHD(frame) %#codegen
         
 %% feature extraction
     BLOCK_SIZE = 5;
-    SCALE_FACT = 4;
+    SCALE_FACT = 3;
 
     f_small = imresize(f,1/SCALE_FACT,'nearest');
 
@@ -107,7 +107,7 @@ function [s18ccode,boundingbox] = detectHD(frame) %#codegen
     score = (score - min(score(:))) / (max(score(:)) - min(score(:)));
     valid = score > prctile(score(:),96);
 
-    webcoder.console.log(sprintf('found %d good bar-like cells out of %d \n',int32(sum(valid(:))),int32(numel(valid))));    
+%     webcoder.console.log(sprintf('found %d good bar-like cells out of %d \n',int32(sum(valid(:))),int32(numel(valid))));    
 
     %% quick dilation to connect barcode cell fragments
     
@@ -147,7 +147,7 @@ function [s18ccode,boundingbox] = detectHD(frame) %#codegen
     
     %% find barcode candidates regions       
     [CC,n] = bwlabel(valid_);
-    webcoder.console.log(sprintf('found %d good connected regions\n',int32(n)));    
+%     webcoder.console.log(sprintf('found %d good connected regions\n',int32(n)));    
     best_bar_code = false(size(CC));
     if n == 0
         % no valid regions were identified return error
@@ -160,21 +160,119 @@ function [s18ccode,boundingbox] = detectHD(frame) %#codegen
             end
         end
         [maxarea,id] = max(barcode_candidate_area);
-        webcoder.console.log(sprintf('largest candidate has %d blocks.\n',int32(maxarea)));
+%         webcoder.console.log(sprintf('largest candidate has %d blocks.\n',int32(maxarea)));
         best_bar_code = CC == id;
     else
         best_bar_code = logical(CC);
     end
 
-    % find bounding box
+    %% find bounding box, centroid, eccentricity and orientation
     scale = size(frame_reshaped,1) / size(valid_,1);
     [x,y] = ind2sub(size(best_bar_code),find(best_bar_code));
-    x0 = (min(x)-1) * scale;
-    x1 = (max(x)) * scale;
-    y0 = (min(y)-1) * scale;
-    y1 = (max(y)) * scale;
-    webcoder.console.log(sprintf('best boudingbox is %.1f,%.1f,%.1f,%.1f .\n',single(y0),single(x0),single(y1),single(x1)));
-    boundingbox = (single([y0 x0 y1 x1]));
+    centroid = [mean(x) mean(y)];
+    x0 = (min(x)-1);
+    x1 = (max(x));
+    y0 = (min(y)-1);
+    y1 = (max(y));
+%     webcoder.console.log(sprintf('best boudingbox is %.1f,%.1f,%.1f,%.1f .\n',single(y0),single(x0),single(y1),single(x1)));
+    boundingbox = (single([y0 x0 y1 x1] * scale));
+    
+%     [V,D] = eig(cov([x y] - centroid));
+    [~,S,V] = svd([x y] - centroid);
+    D = diag(S);
+
+    eccentricity = 1 - (D(2) / D(1)); % how linear is this shape?
+    orientation = 90+rad2deg(atan2(V(2),V(1)));
+  
+    if eccentricity < 0.80
+        % it does not look like a bar, return error code.
+    end
+
+%     figure(1)
+%     scatter(x,y)
+%     axis equal
+%     hold on
+%     quiver(centroid(1),centroid(2),V(1)*10,V(2)*10)
+%     quiver(centroid(1),centroid(2),V(3)*10,V(4)*10)
+%     hold off
+%     figure(2)
+%     imshow(imrotate(best_bar_code,-orientation))
+
+    rot = @(angle) [cosd(angle), -sind(angle); sind(angle), cosd(angle)];
+    rotated_bb = (rot(-orientation) * ([x y] - centroid)' + centroid');
+    W = ceil(max(rotated_bb(2,:)) - min(rotated_bb(2,:))) + 2; % extra padding to capture all the edges
+    H = ceil(max(rotated_bb(1,:)) - min(rotated_bb(1,:))); 
+%     figure(1)
+%     imshow(best_bar_code)
+%     hold on
+%     scatter(rotated_bb(2,:),rotated_bb(1,:))
+%     hold off
+% 
+    
+    
+    %% code ROI extraction
+    scale = size(f,1) / size(best_bar_code,1);
+
+    [yy,xx] = meshgrid(-W/2:W/2-1, -H/2:H/2-1);
+    pts = scale * ((rot(orientation) * ([xx(:),yy(:)]')) + (centroid-1)');
+    
+%     figure(1), imshow(f)
+%     hold on
+%     scatter(pts(2,:),pts(1,:))
+%     hold off
+    
+%     resamp = makeresampler('linear','fill');
+    xx = imresize(reshape(pts(1,:),[H,W]),scale/2);
+    yy = imresize(reshape(pts(2,:),[H,W]),scale/2);
+
+%     tmap_B = cat(3,yy,xx);
+%     imbar = tformarray(f,[],resamp,[2 1],[1 2],[],tmap_B+1,0);
+    imbar = applyLookUpTable(f,xx,yy);
+    
+    red_ratio = @(im) (2*im(:,:,1)) - (im(:,:,2) + im(:,:,3));
+    imbar_score = red_ratio(imbar);
+    
+%     balance = mean(imbar,[1 2]);
+%     balance = balance ./ mean(balance);
+%     imbar = imbar ./ balance;
+    
+    % find the top and the bottom
+    vertical_profile = sum(imbar_score,2);
+    T = mean(vertical_profile);
+    peaks = find(vertical_profile > T);
+    span = [peaks(1) peaks(end)];
+    imbar_score = imbar_score(span(1):span(2),:);
+
+    
+    horizontal_profile = sum(imbar_score,1);
+    T = mean(horizontal_profile);
+    peaks = find(horizontal_profile > T);
+    span = [peaks(1)-1 peaks(end)+1];
+    imbar_score = imbar_score(:,span(1):span(2));
+    
+%     imbar_score = imdilate(imbar_score,true(1,3));
+% imshow(imbar_score,[])
+
+    [H,~] = size(imbar_score);
+    t0 = round(H/3);
+    t1 = round(2*H/3);
+    signal_rows = [
+        sum(imbar_score(1:t0,:));
+        sum(imbar_score(t0+1:t1,:));
+        sum(imbar_score(t1:end,:))
+    ];
+
+    s18ccode = char(signal_rows(1:24));
+    
+    %     imbar_binned = imresize(imresize(imresize(imbar_score,[3 75]*3,'cubic'),[3 75]*2,'cubic'),[3 75],'cubic');
+    %     plot(imbar_binned')
+    %             T = otsuthresh(H)*255;
+
+    %     sum(imbar_score)
+    %     imshow(imbar_binned,[])
+
+    
+
 
 %     MIN_AREA_EXPECTED = uint32(0.04 * numel(valid_)); % 4% of area of frame
 
