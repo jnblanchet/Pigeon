@@ -1,10 +1,23 @@
 function g = applyLookUpTable(f,lutx,luty)
 
+    [H,W,~] = size(f);
+    H = H-1; W = W-1; % edge clamp
     g = zeros(size(lutx,1),size(lutx,2),size(f,3));
     for i=1:size(lutx,1)
         for j=1:size(lutx,2)
             x = lutx(i,j);
             y = luty(i,j);
+            
+            if x < 1
+                x = 1;
+            elseif x > H
+                x = H;
+            end
+            if y < 1
+                y = 1;
+            elseif y > W
+                y = W;
+            end
             
             x0 = floor(x);
             y0 = floor(y);
