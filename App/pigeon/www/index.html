@@ -14,8 +14,9 @@ All rights reserved.
             * https://ssl.gstatic.com is required only on Android and is needed for TalkBack to function properly
             * Disables use of inline scripts in order to mitigate risk of XSS vulnerabilities. To change this:
                 * Enable inline JS: add 'unsafe-inline' to default-src
+				<meta http-equiv="Content-Security-Policy" content="default-src 'unsafe-inline' data: gap: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
         -->
-        <meta http-equiv="Content-Security-Policy" content="default-src 'unsafe-inline' data: gap: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+		<meta http-equiv="Content-Security-Policy" content="default-src *; style-src 'self' http://* 'unsafe-inline'; script-src 'self' http://* 'unsafe-inline' 'unsafe-eval'" />
         <meta name="format-detection" content="telephone=no">
         <meta name="msapplication-tap-highlight" content="no">
         <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
@@ -28,15 +29,13 @@ All rights reserved.
         <div class="app">
             <h1>Pigeon</h1>
             <div id="deviceready" class="">
-                <p class="event listening">Loading...</p>
                 <p class="event received">
 					<div>
 					<a href="scan.html">
-						<img border="0" alt="Scan" src="img/scan.png">
+						<img class="navigationbuttons" alt="Scan" src="img/scan.png">
 					</a>
-					&nbsp;
 					<a href="index.html">
-						<img border="0" alt="History" src="img/history.png">
+						<img class="navigationbuttons" alt="History" src="img/history.png">
 					</a>
 					</div>
 				</p>

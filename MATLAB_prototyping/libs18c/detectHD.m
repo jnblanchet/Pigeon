@@ -1,30 +1,53 @@
-function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
-% frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
-% frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
-% frame = imrotate(frame,90);
-% z = zeros(size(frame,[1 2]),'uint8');
-% r = frame(:,:,1)';
-% g = frame(:,:,2)';
-% b = frame(:,:,3)';
-% frame = [r(:)';g(:)';b(:)';z(:)'];
-% frame = reshape(frame,[ 4, 1920, 1080 ]);
-% 
+function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count) %#codegen
+% frame is a RGBA packed uint8 buffer of size 4K (maximum resolution)
+% any frame containing more pixels will not be accepted
 
+    DEBUG = false;
+%     % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
+%     % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
+%     frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\stream.png');
+% %     frame = imresize(frame,0.25);
+%     row_count = int32(size(frame,1));
+%     col_count = int32(size(frame,2));
+%     % % frame = imrotate(frame,90);
+%     z = zeros(size(frame,[1 2]),'uint8');
+%     r = frame(:,:,1)';
+%     g = frame(:,:,2)';
+%     b = frame(:,:,3)';
+%     frame = [r(:)';g(:)';b(:)';z(:)'];
+%     frame = reshape(frame,[4, col_count, row_count]);
+    
+    
     % check types and sizes
+    assert(isa(row_count, 'int32'));
+    assert(numel(row_count) == 1);
+    assert(isa(col_count, 'int32'));
+    assert(numel(col_count) == 1);
+    
     assert(isa(frame, 'uint8'));
-    assert(all( size(frame) == [ 4, 1080, 1920])); % frames comes in as RGBA packed row major
-    r = reshape(frame(1:4:end),1920,1080)';
-    g = reshape(frame(2:4:end),1920,1080)';
-    b = reshape(frame(3:4:end),1920,1080)';
-    frame_reshaped = cat(3,r,g,b);
-
+    assert(all( size(frame) == [ 4, 3840, 2160])); % frames comes in as RGBA packed row major
+    REAL_LEN = row_count * col_count * 4;
+    assert((row_count * col_count * 4) <= REAL_LEN);
+        
     s18ccode = '000000000000000000000000';
-    s18ccode = char(frame_reshaped(1:100:2400));
     exitcode = int32(0);
 
+    if DEBUG
+        webcoder.console.log(sprintf('Processing image of size %d x %d.',int32(col_count),int32(row_count)));
+    end
     %% Preprocessing
-    f = im2single(frame_reshaped);
-        
+    % packed 2 planar, and single conversion (memory efficient implementation)
+    f = zeros([row_count,col_count,3],'single');
+    id = int32(1);
+    for x = 1:row_count
+        for y = 1:col_count
+            f(x,y,1) = single(frame(id+0));
+            f(x,y,2) = single(frame(id+1));
+            f(x,y,3) = single(frame(id+2));
+            id = id + 4;
+        end
+    end
+    
     %% Feature Extraction
     BLOCK_SIZE = 5;
     SCALE_FACT = 3;
@@ -81,6 +104,9 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     features = features / (2*BLOCK_SIZE*BLOCK_SIZE);
     features = reshape(features,size(features,1)*size(features,2),size(features,3));
     
+    if DEBUG
+        webcoder.console.log(sprintf('Computed feature histogram %d x %d.',int32(grid_y),int32(grid_x)));
+    end
     %% Classify
     M = [    0.0527    1.5903    0.9982   -0.0369   -0.5392   -0.1954    0.1030    0.7808    2.9037   -0.8245   -1.3336   -1.5216    0.7569   -1.2331    0.1142   -0.4805    0.7901   -1.8255    1.6295   -2.3931   -0.4514   -0.0468   2.2480    0.8620   -1.4884   -1.3545   -0.4550   -0.5069    3.8599   -1.3284]';
     score = features * M; % eval
@@ -88,8 +114,10 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     score = (score - min(score(:))) / (max(score(:)) - min(score(:)));
     valid = score > prctile(score(:),96);
 
-%     webcoder.console.log(sprintf('found %d good bar-like cells out of %d \n',int32(sum(valid(:))),int32(numel(valid))));    
-
+    if DEBUG
+        webcoder.console.log(sprintf('Found %d bar-like cells out of %d across the image.',int32(sum(valid(:))),int32(numel(valid))));    
+    end
+    
     %% ROI candidate post-processing
     % quick dilation to connect barcode cell fragments
     valid_ = reshape(valid,grid_x,grid_y);
@@ -128,7 +156,11 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     
     %% Find Barcode Candidates Regions       
     [CC,n] = bwlabel(valid_);
-%     webcoder.console.log(sprintf('found %d good connected regions\n',int32(n)));    
+    
+    if DEBUG
+        webcoder.console.log(sprintf('Found %d good connected regions.',int32(n)));
+    end
+ 
     best_bar_code = false(size(CC));
     if n == 0
         % no valid regions were identified return error
@@ -141,36 +173,48 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
             end
         end
         [maxarea,id] = max(barcode_candidate_area);
-%         webcoder.console.log(sprintf('largest candidate has %d blocks.\n',int32(maxarea)));
+        
+    if DEBUG
+        webcoder.console.log(sprintf('Largest candidate has %d blocks.',int32(maxarea)));
+    end
+    
         best_bar_code = CC == id;
     else
         best_bar_code = logical(CC);
     end
 
     %% Find bounding box, centroid, eccentricity and orientation
-    scale = size(frame_reshaped,1) / size(valid_,1);
-    [x,y] = ind2sub(size(best_bar_code),find(best_bar_code));
-    centroid = [mean(x) mean(y)];
-    x0 = (min(x)-1);
-    x1 = (max(x));
-    y0 = (min(y)-1);
-    y1 = (max(y));
-%     webcoder.console.log(sprintf('best boudingbox is %.1f,%.1f,%.1f,%.1f .\n',single(y0),single(x0),single(y1),single(x1)));
+    scale = size(f,1) / size(valid_,1);
+    [idx,idy] = ind2sub(size(best_bar_code),find(best_bar_code));
+        
+    centroid = [mean(idx) mean(idy)];
+    x0 = (min(idx)-1);
+    x1 = (max(idx));
+    y0 = (min(idy)-1);
+    y1 = (max(idy));
     boundingbox = (single([y0 x0 y1 x1] * scale));
+
+    if DEBUG
+        webcoder.console.log(sprintf('Best boudingbox is (x0,y0,x0,y1) = %.1f,%.1f,%.1f,%.1f.',single(boundingbox(1)),single(boundingbox(2)),single(boundingbox(3)),single(boundingbox(4))));
+    end
     
-%     [V,D] = eig(cov([x y] - centroid));
-    [~,S,V] = svd([x y] - centroid);
+    % idx has something inside!
+    pts = double([idx(:), idy(:)]) - repmat(double(centroid),numel(idx),1); % matrix operation broadcast doesn't compile well
+    
+    [~,S,V] = svd(pts);
     D = diag(S);
 
-    eccentricity = 1 - (D(2) / D(1)); % how linear is this shape?
+    eccentricity = 1 - (D(2) / D(1)); % how line-like is this shape?
     orientation = 90+rad2deg(atan2(V(2),V(1)));
   
+    if DEBUG
+        webcoder.console.log(sprintf('Eccentricity of %.1f and orientation of %.1f deg.',single(eccentricity), single(orientation)));
+    end
+    
     if eccentricity < 0.80
         % it does not look like a bar! the length-width ratio is off
         exitcode = int32(-1);
-        return;
-    end
-
+    else
 %     figure(1)
 %     scatter(x,y)
 %     axis equal
@@ -182,7 +226,7 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
 %     imshow(imrotate(best_bar_code,-orientation))
 
     rot = @(angle) [cosd(angle), -sind(angle); sind(angle), cosd(angle)];
-    rotated_bb = (rot(-orientation) * ([x y] - centroid)' + centroid');
+    rotated_bb = (rot(-orientation) * (pts)' + repmat(centroid',1,size(pts,1)));
     W = ceil(max(rotated_bb(2,:)) - min(rotated_bb(2,:))) + 10; % extra padding to capture all the edges
     H = ceil(max(rotated_bb(1,:)) - min(rotated_bb(1,:))); 
 %     figure(1)
@@ -197,8 +241,11 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     scale = size(f,1) / size(best_bar_code,1);
 
     [yy,xx] = meshgrid(-W/2:W/2-1, -H/2:H/2-1);
-    pts = scale * ((rot(orientation) * ([xx(:),yy(:)]')) + (centroid-1)');
+    pts = scale * (rot(orientation) * [xx(:),yy(:)]' + repmat((centroid-1)',1,numel(xx)));
     
+    if DEBUG
+        webcoder.console.log(sprintf('extracted barcode candidate of size %d by %d.',int32(size(yy,2)), int32(size(yy,1))));
+    end
 %     figure(1), imshow(f)
 %     hold on
 %     scatter(pts(2,:),pts(1,:))
@@ -238,20 +285,25 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     span = [peaks(1)-2 peaks(end)+2];
     imbar_score = imbar_score(:,span(1):span(2));
     
-%     imbar_score = imdilate(imbar_score,true(1,3));
-    imbar_score_dilate = zeros(size(imbar_score));
-    imbar_score_dilate(:,[1 end]) = imbar_score(:,[1 end]);
-    for i = 1:size(imbar_score_dilate,1)
-        for j = 2:size(imbar_score_dilate,2)-1
-            imbar_score_dilate(i,j) = max(imbar_score(i,j-1:j+1));
-        end
-    end
 
 % imshow(imbar_score_dilate,[])
 
-    [H,~] = size(imbar_score_dilate);
+    [H,W] = size(imbar_score);
     t0 = round(H/3);
     t1 = round(2*H/3);
+    
+    % dilate (top and bottom have more weight
+    imbar_score_dilate = zeros(size(imbar_score));
+    for i = 1:size(imbar_score_dilate,1)
+        w = 1;
+        if i <= t0 || i >= t1
+            w = 2;
+        end
+        for j = 1:size(imbar_score_dilate,2)
+            imbar_score_dilate(i,j) = max(imbar_score(i,max(1,j-w):min(j+w,W)));
+        end
+    end
+
     
     row0_profile = mean(imbar_score_dilate(1:t0,:));
     row1_profile = mean(imbar_score_dilate(t0+1:t1,:));
@@ -270,8 +322,7 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     [cc,n] = bwlabel(C);
     if n ~= 75
         exitcode = int32(-2);
-        return;
-    end
+    else
 
     sampling_centroid = zeros(1,75);
     sampling_count = zeros(1,75);
@@ -287,8 +338,7 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     % the center bar should be only ones
     if sum(C(sampling_centroid)) ~= 75
         exitcode = int32(-3);
-        return;
-    end
+    else
 
     T = T(sampling_centroid);
     B = B(sampling_centroid);
@@ -300,7 +350,7 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     % check orientation
     left_sync = code_(7:9);
     right_sync = code_(numel(code_)-8:numel(code_)-6);
-    flipped = false;
+    isvalid = true;
     if ~isequal('AAD',left_sync) || ~isequal('DAD',right_sync)
         % if the sync codes are wrong, the code may be flipped
         codes = ['T','A','D','F'];
@@ -309,8 +359,13 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
         right_sync = code_(numel(code_)-8:numel(code_)-6);
         if ~isequal('AAD',left_sync) || ~isequal('DAD',right_sync)
             % error: code was misread because the sync codes are wrong
+            isvalid = false;
         end
     end
+    
+    if ~isvalid
+        exitcode = int32(-4);
+    else
     % crop out sync codes, copy the rest to a new buffer
     valid = true(1,numel(code_));
     valid([7:9 numel(code_)-8:numel(code_)-6]) = false;
@@ -320,6 +375,8 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     % ecc = code(59:70);
     % code(59:70) = [];
 
+    assert(all( size(code) == [1 69]));
+    
     % convert to binary
     binary = true(2,69);
     for i=1:numel(code)
@@ -333,12 +390,19 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     end
     binary = binary(:)';
 
+    assert(all( size(binary) == [1 138]));
+    
     % +1 for MATLAB 1 based indexing
     parsebin2dec = @(bin) bin2dec(char(uint8(bin)+48));
 
     %% field 1: UPU identifier
     UPU_identifier = 'J'; % always J
 
+    s18ccode(1) = UPU_identifier;
+    if DEBUG
+        webcoder.console.log(sprintf('UPU_identifier is always J: %c',char(UPU_identifier)));
+    end
+    
     %% field 2: format
     % TODO: error detection, only [1 4] possible
     format_identifier_bits = (0:3)+1;
@@ -348,9 +412,23 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
         return;
     end
     
-    format_identifiers = {'18A','18B','18C','18D'};
-    format_identifier = format_identifiers{format_identifier_id+1};
-
+    %format_identifiers = {'18A','18B','18C','18D'};
+    format_identifier = '   ';
+    if format_identifier_id == 0
+        format_identifier = '18A';
+    elseif format_identifier_id == 1
+        format_identifier = '18B';
+    elseif format_identifier_id == 2
+        format_identifier = '18C';
+    elseif format_identifier_id == 3
+        format_identifier = '18D';
+    end
+    
+    s18ccode(2:4) = format_identifier;
+    if DEBUG
+        webcoder.console.log(sprintf('format_identifier is: %s',char(format_identifier)));
+    end
+    
     %% field 3: issuer_code
     issuer_code_bits = (4:19)+1;
     %3 characters
@@ -374,6 +452,10 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
 
     issuer_code = [issuer_code_1, issuer_code_2, issuer_code_3];
 
+    s18ccode(5:7) = issuer_code;
+    if DEBUG
+        webcoder.console.log(sprintf('issuer_code is: %s',char(issuer_code)));
+    end
 
     %% field 4: equipement_id
     hex_table1 = '0123456789ABCDEF';
@@ -387,12 +469,22 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
 
     equipement_id = [equipement_id_1, equipement_id_2, equipement_id_3];
 
+    s18ccode(8:10) = equipement_id;
+    if DEBUG
+        webcoder.console.log(sprintf('equipement_id is: %s',char(equipement_id)));
+    end
+
     %% field 5: item_priority
     item_priority_bits = (32:33)+1; % hex 0-9;A-F
 
     priorities = ['N','L','H','U']; % from 0 to 3
     item_priority = priorities(1+parsebin2dec(binary(item_priority_bits)));
 
+    s18ccode(11) = item_priority;
+    if DEBUG
+        webcoder.console.log(sprintf('item_priority is: %s',char(item_priority)));
+    end
+    
     %% field 6: serial_number
     serial_number_bits = (34:49)+1;
     %3 characters
@@ -400,31 +492,58 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame) %#codegen
     %2: floor(mod(D,5120)/160)
     %3: floor(mod(D,160)/6)
     %4: mod(mod(D,160),6)
-    serial_number = int32(parsebin2dec(binary(serial_number_bits)));
-    serial_number_month = floor(serial_number/5120) + 1;
-    serial_number_day = floor(mod(serial_number,5120)/160);
-    serial_number_hour = floor(mod(serial_number,160)/6);
-    serial_number_10min = mod(mod(serial_number,160),6);
-    %serial_number = [serial_number_month serial_number_day serial_number_hour serial_number_10min];
+    serial_number = (parsebin2dec(binary(serial_number_bits)));
+    serial_number_month = int32(floor(serial_number/5120) + 1);
+    serial_number_day = int32(floor(mod(serial_number,5120)/160));
+    serial_number_hour = int32(floor(mod(serial_number,160)/6));
+    serial_number_10min = int32(mod(mod(serial_number,160),6));
+    
+    serial_number_formatted = sprintf('%02d%02d%02d%d',serial_number_month,serial_number_day,serial_number_hour,serial_number_10min);
+    assert(all( size(serial_number_formatted) == [ 1, 7 ]))
+    
+    s18ccode(12:18) = serial_number_formatted;
+    if DEBUG
+        webcoder.console.log(sprintf('serial_number is: %02d%02d%02d%d',serial_number_month,serial_number_day,serial_number_hour,serial_number_10min));
+    end
 
-
-    %% field 7 (TODO: 18D not implemented)
+    %% field 7 (note: 18D not implemented)
     % i'm supposed to crop out ECC i think, serial is at the end
     n = numel(binary)-1;
     serial_number_item_bits = ([50:54 (n-8):n])+1;
     serial_number_item = int32(parsebin2dec(binary(serial_number_item_bits)));
-    % TODOHACK: this code is sketchy as best.
+    % TODO: remove err correction code before this point
 
+    serial_number_item_formatted = sprintf('%05d',serial_number_item);
+    assert(all( size(serial_number_item_formatted) == [ 1, 5 ]))
+    
+    s18ccode(19:23) = serial_number_item_formatted;
+    if DEBUG
+        webcoder.console.log(sprintf('serial_number_item is: %05d',serial_number_item));
+    end
+    
     %% field 8
     tracking_indicator_bits = (135:136)+1; % hex 0-9;A-F
 
     tracking = ['T','F','D','N']; % from 0 to 3
     tracking_indicator = tracking(1+parsebin2dec(binary(tracking_indicator_bits)));
-
-    s18ccode = sprintf('%c%s%s%s%c%02d%02d%02d%d%05d%c',UPU_identifier,format_identifier,issuer_code,...
-        equipement_id,item_priority,serial_number_month,serial_number_day,serial_number_hour,...
-        serial_number_10min,serial_number_item,tracking_indicator);
-
+    
+    s18ccode(24) = tracking_indicator;
+    if DEBUG
+        webcoder.console.log(sprintf('tracking is: %c',tracking_indicator));
+    end
+    
+%     s18ccode = sprintf('%c%s%s%s%c%02d%02d%02d%d%05d%c',UPU_identifier,format_identifier,issuer_code,...
+%         equipement_id,item_priority,serial_number_month,serial_number_day,serial_number_hour,...
+%         serial_number_10min,serial_number_item,tracking_indicator);
+    
+    if DEBUG
+        webcoder.console.log(sprintf('final code is: %s',s18ccode));
+    end
+    
+    end % if error, skip the rest
+    end
+    end
+    end
     %% return
     
     assert(isa(s18ccode, 'char'));

@@ -11,51 +11,90 @@ All rights reserved.
         <meta name="msapplication-tap-highlight" content="no">
         <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
         <meta name="color-scheme" content="light dark">
-        <link rel="stylesheet" href="css/index.css">
+        <link rel="stylesheet" href="css/scan.css">
 		<link rel="icon" type="image/png" href="/img/icon.png">
         <title>Pigeon</title>
     </head>
     <body>
-        <div>
-		
-            <h1>Scan S18C code <button type="button" onclick="onGrabFrameButtonClick()" >snap!</button></h1>
-            <div id="deviceready" class="">
-			<div class="container">
-				<video id="livefeed" autoplay ></video>
-				<canvas class="canvas" id="canvasoverlay"></canvas>
+		<h1 style="width:100%; text-align:center">Scan S18C code</h1>
+						<button type="button" onclick="onGrabFrameButtonClick()" >snap!</button>
+
+			<div>
+				<div class="container">
+					<video id="livefeed" autoplay ></video>
+					<canvas class="canvas" id="canvasoverlay"></canvas>
+				</div>
 			</div>
-				<script>
-			
-				</script>
+			<div style="width=100%; text-align:center;">
+				<p class="event received">
+					<div>
+					<a href="index.html" id="btncancel">
+						<img class="navigationbuttons" alt="Cancel" src="img/cancel.png">
+					</a>
+					<a href="index.html" id="btnrestart" hidden>
+						<img class="navigationbuttons" alt="Restart" src="img/restart.png">
+					</a>
+					<a href="index.html" id="btnaccept"hidden>
+						<img class="navigationbuttons" alt="Accept" src="img/accept.png">
+					</a>
+					</div>
+				</p>
+			</div>
+			<div style="padding-left:100px;">
+				<table id="tableresults" hidden>
+				<tr>
+					<th class="left">Field</th>
+					<th class="right">Data</th> 
+				</tr>
+				<tr>
+					<td class="left">UPU Identifier</td>
+					<td class="right" id="field_upu"></td>
+				</tr>
+				<tr>
+					<td class="left">Format Identifier</td>
+					<td class="right" id="field_format"></td>
+				</tr>
+				<tr>
+					<td class="left">Issuer Code</td>
+					<td class="right" id="field_issuer"></td>
+				</tr>
+				<tr>
+					<td class="left">Equipment Identifier</td>
+					<td class="right" id="field_equip"></td>
+				</tr>
+				<tr>
+					<td class="left">Item Priority</td>
+					<td class="right" id="field_priority"></td>
+				</tr>
+				<tr>
+					<td class="left">Serial Number- Month</td>
+					<td class="right" id="field_sn_month"></td>
+				</tr>
+				<tr>
+					<td class="left">Serial Number – Day</td>
+					<td class="right" id="field_sn_day"></td>
+				</tr>
+				<tr>
+					<td class="left">Serial Number – Hour</td>
+					<td class="right" id="field_sn_hour"></td>
+				</tr>
+				<tr>
+					<td class="left">Serial Number – 10 Min</td>
+					<td class="right" id="field_sn_min"></td>
+				</tr>
+				<tr>
+					<td class="left">Serial Number – Item Number Part</td>
+					<td class="right" id="field_sn_itemno"></td>
+				</tr>
+				<tr>
+					<td class="left">Tracking Indicator</td>
+					<td class="right" id="field_tracking"></td>
+				</tr>  
+				</table>
             </div>
-        </div>
         <script src="cordova.js"></script>
 		<script async type="text/javascript" src="./js/libsc18c.js"></script>
         <script src="js/scan.js"></script>
-		<style>
-			.container {
-				margin: 0 auto;
-				position: relative;
-			}
-
-			video {
-				width: 100%;
-				height: auto;
-				position: absolute;
-				top: 0;
-				left: 0;
-			}
-
-			canvas {
-				width: 100%;
-				height: auto;
-				position: absolute;
-				top: 0;
-				left: 0;
-				z-index: 10;
-				background-color:rgba(255,0,0,0.10);
-			}
-		</style>
     </body>
 </html>
 
