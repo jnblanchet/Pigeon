@@ -1,4 +1,4 @@
-function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count) %#codegen
+function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_count) %#codegen
 % frame is a RGBA packed uint8 buffer of size 4K (maximum resolution)
 % any frame containing more pixels will not be accepted
 
@@ -32,6 +32,7 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     assert((row_count * col_count * 4) <= REAL_LEN);
         
     s18ccode = '000000000000000000000000';
+    buscode = '000000000000000000000000000000000000000000000000000000000000000000000000000'; % 75 characters
     exitcode = int32(0);
 
     if DEBUG
@@ -437,6 +438,7 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     valid = true(1,numel(code_));
     valid([7:9 numel(code_)-8:numel(code_)-6]) = false;
     code = code_(valid);
+    buscode = code_; % copy the bus code to the returned buffer
 
     % crop out ECC TODO: solomon reed correction
     % ecc = code(59:70);
@@ -621,6 +623,8 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     
     assert(isa(s18ccode, 'char'));
     assert(all( size(s18ccode) == [ 1, 24 ]))
+    assert(isa(buscode, 'char'));
+    assert(all( size(buscode) == [ 1, 75 ]))
     assert(isa(boundingbox, 'single'));
     assert(all( size(boundingbox) == [ 1, 4 ]))
     assert(isa(exitcode, 'int32'));
