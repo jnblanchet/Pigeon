@@ -1757,6 +1757,7 @@ function getBinary() {
   }
 }
 
+
 // fetch doesn't work well with cordova, This was added by JN.Blanchet to support wasm fetch on cordova/android
 function fetch2(url, info) {
   return new Promise(function(resolve, reject) {
@@ -1818,7 +1819,10 @@ function getBinaryPromise() {
     }).catch(function () {
       return getBinary();
     });
+
 }
+
+
 
 
 // Create the wasm instance.

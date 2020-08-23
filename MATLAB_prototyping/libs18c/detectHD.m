@@ -3,12 +3,12 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
 % any frame containing more pixels will not be accepted
 
     DEBUG = false;
-%     % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
-%     % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
-% %     frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_100443.jpg');
-% % frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_1004432.jpg');
+    % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
+    % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
+%     frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_100443.jpg');
+% frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_1004432.jpg');
 % frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175637.jpg');
-% %     frame = imresize(frame,0.25);
+%     frame = imresize(frame,0.25);
 %     row_count = int32(size(frame,1));
 %     col_count = int32(size(frame,2));
 %     % % frame = imrotate(frame,90);
@@ -273,11 +273,28 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     %     balance = mean(imbar,[1 2]);
     %     balance = balance ./ mean(balance);
     %     imbar = imbar ./ balance;
+    
+    %% refine rotation
+    
+%     theta = [89.5:0.05:91.5];
+%     R = radon(imbar_score,theta);
+%     col = (1:size(R,1))';
+%     variance_per_angle = zeros(size(theta));
+%     for i=1:size(R,2)
+%         variance_per_angle(i) = std(col,R(:,i));
+%     end
+%     
+%     [~,bestangle] = min(variance_per_angle);
+%     bestangle = 90-theta(bestangle);
+%     
+%     imbar_score = imrotate(imbar_score,-bestangle,'crop');
+%     imshow(imbar_score)
+%     
     %% Refine ROI
     [H,W] = size(imbar_score);
     % find the top and the bottom
     vertical_profile = sum(imbar_score,2);
-    T = mean(vertical_profile)*0.9; % The vertical profile has more white than black. this heuristic gives us a good threshold.
+    T = mean(vertical_profile)*1; % The vertical profile has more white than black. this heuristic gives us a good threshold.
     span = [1 1];
     for i=round(H/2):-1:1 % find upper bound
         if vertical_profile(i) < T
@@ -373,12 +390,17 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
         peak = sampling_centroid(c);
         if c==1
             bottom = round((sampling_centroid(c) + sampling_centroid(c+1))/2);
-        else
+        elseif c==numel(sampling_centroid)
             bottom = round((sampling_centroid(c-1) + sampling_centroid(c))/2);
+        else
+            bottom = [round((sampling_centroid(c-1) + sampling_centroid(c))/2), ...
+                      round((sampling_centroid(c+1) + sampling_centroid(c))/2)];
         end
         
         expected_white = row1_profile_unfiltered(peak);
-        expected_black = row1_profile_unfiltered(bottom);
+        expected_black = min([row1_profile_unfiltered(bottom),...
+                            row0_profile(bottom),...
+                            row2_profile(bottom)]);
         
         % make it true if it's closer to the peak
         T(c) = abs(row0_profile(peak) - expected_white) < abs(row0_profile(peak) - expected_black);

@@ -16,14 +16,14 @@ All rights reserved.
         <title>Pigeon</title>
     </head>
     <body>
-		<h1 style="width:100%; text-align:center">Scan IDTag</h1>
+		<h1 class="centered">Scan IDTag</h1>
 			<div>
 				<div class="container">
 					<video id="livefeed" autoplay ></video>
 					<canvas class="canvas" id="canvasoverlay"></canvas>
 				</div>
 			</div>
-			<div style="width=100%; text-align:center;">
+			<div class="centered">
 				<p class="event received">
 					<div>
 					<a href="index.html" id="btncancel">
@@ -38,7 +38,7 @@ All rights reserved.
 					</div>
 				</p>
 			</div>
-			<div style="padding-left:100px;">
+			<div style="padding-left:15%;">
 				<table id="tableresults" hidden>
 				<tr>
 					<th class="left">Field</th>
@@ -91,7 +91,7 @@ All rights reserved.
 				</table>
             </div>
         <script src="cordova.js"></script>
-			<script src="js/adapter.js"></script>
+		<script src="js/adapter.js"></script>
 		<script async type="text/javascript" src="./js/libsc18c.js"></script>
         <script src="js/scan.js"></script>
     </body>
