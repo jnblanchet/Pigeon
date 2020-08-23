@@ -5,13 +5,20 @@ All rights reserved.
  
 var imageCapture;
 var hiddenFrameCanvas = document.createElement("canvas"); // used to convert imageBitmap into pixel data
-  
+var validCodeCache = [];
+
 document.addEventListener('deviceready', onDeviceReady, false);
 document.getElementById("btnrestart").addEventListener("click", function(event){
   event.preventDefault();
   startCamera();
   codeCapturedGUI(true);
 });
+
+document.getElementById("btnaccept").addEventListener("click", function(event){
+	if(validCodeCache)
+		archiveObject(validCodeCache); // write to storage (see storage.js)
+});
+
 
 function onDeviceReady() {
 	startCamera();
@@ -40,7 +47,7 @@ function startCamera() {
 					track.applyConstraints({advanced: [{torch: true}]})
 					.catch(e => alert("cannot apply constraint: " + e));
 				} else {
-					alert('torch not available');
+					alert('Torch not available on this device');
 				}
 			}			
 			imageCapture = new ImageCapture(track);
@@ -101,9 +108,16 @@ function parseS18cFields(code)
 	};
 }
 
+function validCodeFound(scan_results){
+	displayS18cFields(scan_results.idtag);
+	codeCapturedGUI(false);
+	stopCamera();
+	validCodeCache = scan_results;
+}
+
 // frame grabber
-function runDetection() {	  
-	imageCapture.grabFrame()
+function runDetection() {
+	imageCapture.grabFrame() // todo takePicture() when a code is yellow?
 		.then(function(imageBitmap) {
 			hiddenFrameCanvas.width = imageBitmap.width;
 			hiddenFrameCanvas.height = imageBitmap.height;
@@ -122,10 +136,9 @@ function runDetection() {
 			if (scan_results.exitcode == 0) {
 				// success!
 				ctx.strokeStyle = "green";
-				displayS18cFields(scan_results.idtag);
-				codeCapturedGUI(false);
-				stopCamera();
 				ctx.drawImage(imageBitmap, 0, 0); // freeze on the good frame.
+				scan_results.picture = hiddenFrameCanvas.toDataURL('image/jpeg', 0.95);
+				validCodeFound(scan_results);
 			}
 			else if (scan_results.exitcode == -1)
 			{
@@ -151,7 +164,7 @@ function runDetection() {
 			{
 				ctx.fillStyle = "red";
 				ctx.font = '24px serif';
-				ctx.fillText(scan_results.msg + " " + imageBitmap.width + " x " + imageBitmap.height, 10, 50);
+				ctx.fillText(scan_results.msg, 10, 50);
 			}
 			
 			// avoid memory leaks
@@ -180,8 +193,12 @@ function resize_canvas(element)
 }
 
 
+//** storage **//
+
+
 
 //** libs18c **//
+
 // JavaScript Array to Emscripten Heap
 function _arrayToHeap(typedArray) {
 	var numBytes = typedArray.length * typedArray.BYTES_PER_ELEMENT;
@@ -225,38 +242,43 @@ function runLibs18cDetection(imageData) {
 	// Create Data
 	var buff_input_frame = new Uint8Array(imageData.data.buffer); // library will accept up to 4K resolution here (total pixels)
 	var buff_exit_code = new Int32Array(1);
-	var buff_output_code = new Uint8Array(24);
+	var buff_output_idtag = new Uint8Array(24);
+	var buff_output_buscode = new Uint8Array(75);
 	var buff_output_roi = new Float32Array(4);
 	
 	// Move Data to Heap
 	var bytes_input_frame = _arrayToHeap(buff_input_frame);			
 	var bytes_exit_code = _arrayToHeap(buff_exit_code);
-	var bytes_output_code = _arrayToHeap(buff_output_code);
+	var bytes_output_idtag = _arrayToHeap(buff_output_idtag);
+	var bytes_output_buscode = _arrayToHeap(buff_output_buscode);
 	var bytes_output_roi = _arrayToHeap(buff_output_roi);
 	// Run Function
 	Module._libsc18c_initialize();
 	
 	//var t0 = performance.now()
-	Module._detectHD(
+	Module._detect(
 		bytes_input_frame.byteOffset,
 		imageData.height,
 		imageData.width,
 		bytes_exit_code.byteOffset,
-		bytes_output_code.byteOffset,
+		bytes_output_idtag.byteOffset,
+		bytes_output_buscode.byteOffset,
 		bytes_output_roi.byteOffset);
 	//var t1 = performance.now()
-	//console.log("Call to _detectHD took " + (t1 - t0) + " milliseconds.")
+	//console.log("Call to _detect took " + (t1 - t0) + " milliseconds.")
 
 	Module._libsc18c_terminate();
 	// Copy Data from Heap
 	buff_exit_code = _heapToArray_int32(bytes_exit_code, buff_exit_code);
-	buff_output_code = _heapToString(bytes_output_code, buff_output_code);
+	buff_output_idtag = _heapToString(bytes_output_idtag, buff_output_idtag);
+	buff_output_buscode = _heapToString(bytes_output_buscode, buff_output_buscode);
 	buff_output_roi = _heapToArray_float32(bytes_output_roi, buff_output_roi);
 	
 	// Free Data from Heap
 	_freeArray(bytes_input_frame);
 	_freeArray(bytes_exit_code);
-	_freeArray(bytes_output_code);
+	_freeArray(bytes_output_idtag);
+	_freeArray(bytes_output_buscode);
 	_freeArray(bytes_output_roi);
 	
 	// Display Results
@@ -279,7 +301,8 @@ function runLibs18cDetection(imageData) {
 	return {
 		exitcode: buff_exit_code,
 		msg: error_message,
-		idtag: buff_output_code,
+		idtag: buff_output_idtag,
+		buscode: buff_output_buscode,
 		roi: buff_output_roi
 	};
 }

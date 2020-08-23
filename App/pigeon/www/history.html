@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!--
+Copyrights 2020 (c) Jean-Nicola Blanchet
+All rights reserved.
+-->
+<html>
+    <head>
+        <meta charset="utf-8">
+        <!-- Security-Policy: -->
+		<meta http-equiv="Content-Security-Policy" content="default-src *; style-src 'self' http://* 'unsafe-inline'; script-src 'self' http://* 'unsafe-inline' 'unsafe-eval'; img-src 'self' data:" />
+        <meta name="format-detection" content="telephone=no">
+        <meta name="msapplication-tap-highlight" content="no">
+        <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+        <meta name="color-scheme" content="light dark">
+        <link rel="stylesheet" href="css/history.css">
+		<link rel="icon" type="image/png" href="/img/icon.png">
+        <title>Pigeon</title>
+    </head>
+    <body>
+		<a href="index.html"><img class="menubutton" alt="main" src="img/icon.png"></a>
+        <div class="app">
+            <h1>IDTag history</h1>
+            <div id="divpath" class="container">
+            </div>
+			<div id="divhistory" class="container">
+            </div>
+        </div>
+        <script src="cordova.js"></script>
+		<script src="js/adapter.js"></script>
+		<script src="js/storage.js"></script>
+        <script src="js/history.js"></script>
+    </body>
+</html>
