@@ -5,7 +5,9 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     DEBUG = false;
 %     % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
 %     % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
-%     frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\stream.png');
+% %     frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_100443.jpg');
+% % frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_1004432.jpg');
+% frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175637.jpg');
 % %     frame = imresize(frame,0.25);
 %     row_count = int32(size(frame,1));
 %     col_count = int32(size(frame,2));
@@ -112,7 +114,7 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     score = features * M; % eval
     score = reshape(score,grid_x,grid_y);
     score = (score - min(score(:))) / (max(score(:)) - min(score(:)));
-    valid = score > prctile(score(:),96);
+    valid = score > prctile(score(:),98);
 
     if DEBUG
         webcoder.console.log(sprintf('Found %d bar-like cells out of %d across the image.',int32(sum(valid(:))),int32(numel(valid))));    
@@ -252,8 +254,9 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
 %     hold off
     
 %     resamp = makeresampler('linear','fill');
-    xx = imresize(reshape(pts(1,:),[H,W]),scale/2);
-    yy = imresize(reshape(pts(2,:),[H,W]),scale/2);
+    TARGET_WIDTH = 800;
+    xx = imresize(reshape(pts(1,:),[H,W]),TARGET_WIDTH / W);
+    yy = imresize(reshape(pts(2,:),[H,W]),TARGET_WIDTH / W);
 
 %     tmap_B = cat(3,yy,xx);
 %     imbar = tformarray(f,[],resamp,[2 1],[1 2],[],tmap_B+1,0);
@@ -271,22 +274,33 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     %     balance = balance ./ mean(balance);
     %     imbar = imbar ./ balance;
     %% Refine ROI
+    [H,W] = size(imbar_score);
     % find the top and the bottom
     vertical_profile = sum(imbar_score,2);
-    T = mean(vertical_profile);
-    peaks = find(vertical_profile > T);
-    span = [peaks(1) peaks(end)];
+    T = mean(vertical_profile)*0.9; % The vertical profile has more white than black. this heuristic gives us a good threshold.
+    span = [1 1];
+    for i=round(H/2):-1:1 % find upper bound
+        if vertical_profile(i) < T
+            span(1) = i;
+            break;
+        end
+    end
+    for i=round(H/2):1:H % find lower bound
+        if vertical_profile(i) < T
+            span(2) = i;
+            break;
+        end
+    end
     imbar_score = imbar_score(span(1):span(2),:);
 
     
     horizontal_profile = sum(imbar_score,1);
     T = mean(horizontal_profile);
     peaks = find(horizontal_profile > T);
-    span = [peaks(1)-2 peaks(end)+2];
+    span = [max(1,peaks(1)-2) min(W,peaks(end)+2)];
     imbar_score = imbar_score(:,span(1):span(2));
     
-
-% imshow(imbar_score_dilate,[])
+    % imshow(imbar_score,[])
 
     [H,W] = size(imbar_score);
     t0 = round(H/3);
@@ -302,22 +316,34 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
         for j = 1:size(imbar_score_dilate,2)
             imbar_score_dilate(i,j) = max(imbar_score(i,max(1,j-w):min(j+w,W)));
         end
-    end
-
+    end   
     
     row0_profile = mean(imbar_score_dilate(1:t0,:));
-    row1_profile = mean(imbar_score_dilate(t0+1:t1,:));
+    row1_profile_unfiltered = mean(imbar_score_dilate(t0+1:t1,:));
     row2_profile = mean(imbar_score_dilate(t1:end,:));
-
-%     plot([row0_profile;row1_profile;row2_profile]')
-
+    
+    % apply a laplacian filter to enhance peaks. kernel size is based on 800 px divided by 75 bars
+    h = 2*[0.4490    0.3747    0.1853   -0.1663   -0.5111   -0.6667   -0.5111   -0.1663    0.1853    0.3747    0.4490 ];
+    lap = conv([ones(1,5) * row1_profile_unfiltered(1), row1_profile_unfiltered, ones(1,5) * row1_profile_unfiltered(end)],h,'valid');
+    row1_profile = row1_profile_unfiltered - lap;
+    
+%     lap = conv([ones(1,5) * row0_profile(1), row0_profile, ones(1,5) * row0_profile(end)],h,'valid');
+%     row0_profile = row0_profile - lap;
+%     lap = conv([ones(1,5) * row2_profile(1), row2_profile, ones(1,5) * row2_profile(end)],h,'valid');
+%     row2_profile = row2_profile - lap;    
+%     
+    % plot([row0_profile;row1_profile_unfiltered;row2_profile]'), legend({'top','center','bottom'})
+    
     %% Extract Binary String
     H = hist(row1_profile,0:0.01:1);
-    thresh = otsuthresh(H);
-
-    T = row0_profile > thresh; % top
-    C = row1_profile > thresh; % center
-    B = row2_profile > thresh; % bottom
+    threshC = otsuthresh(H);
+%     threshT = mean(row0_profile);
+%     threshB = mean(row2_profile);
+    
+    % because of the Laplacian enhancement, threshold for row0 and row2 can be much higher
+%     T = row0_profile > threshT; % top
+    C = row1_profile > threshC; % center
+%     B = row2_profile > threshB; % bottom
 
     [cc,n] = bwlabel(C);
     if n ~= 75
@@ -340,13 +366,32 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
         exitcode = int32(-3);
     else
 
-    T = T(sampling_centroid);
-    B = B(sampling_centroid);
+        
+    T = false(1,75);
+    B = false(1,75);
+    for c=1:numel(sampling_centroid)
+        peak = sampling_centroid(c);
+        if c==1
+            bottom = round((sampling_centroid(c) + sampling_centroid(c+1))/2);
+        else
+            bottom = round((sampling_centroid(c-1) + sampling_centroid(c))/2);
+        end
+        
+        expected_white = row1_profile_unfiltered(peak);
+        expected_black = row1_profile_unfiltered(bottom);
+        
+        % make it true if it's closer to the peak
+        T(c) = abs(row0_profile(peak) - expected_white) < abs(row0_profile(peak) - expected_black);
+        B(c) = abs(row2_profile(peak) - expected_white) < abs(row2_profile(peak) - expected_black);
+    end
 
     %% Parse binary string
     % top,bottom bits values: 00, 01, 10, 11 where 1 is white
     codes = ['T','D','A','F'];
     code_ = codes(1+T * 2 + B);
+%     code_ = 'FDFTTTAADDFDAFAAAFTTADTDAATTFFAAATFATDAAFAFDDFFDAFATAATFTDATFFDADFDADTFFDDT';
+%     code_ = 'DFDFFAADATFADFTDADFATFDDTDDTDDFTFTAFDFFATATTFADTFAATATAFATTDDTAFFDADFDFDFF';
+    % % % J18CUSA8E6N062315014880T
     % check orientation
     left_sync = code_(7:9);
     right_sync = code_(numel(code_)-8:numel(code_)-6);
@@ -507,22 +552,23 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
     end
 
     %% field 7 (note: 18D not implemented)
-    % i'm supposed to crop out ECC i think, serial is at the end
-    n = numel(binary)-1;
-    serial_number_item_bits = ([50:54 (n-8):n])+1;
-    serial_number_item = int32(parsebin2dec(binary(serial_number_item_bits)));
-    % TODO: remove err correction code before this point
 
+    n = numel(binary)-1;
+    serial_number_item_bits = ([(n-9):n])+1;
+    serial_number_item = int32(parsebin2dec([binary(serial_number_item_bits)]));
+    % TODO: remove err correction code before this point
+% 142 = 1000 1110
+% 143 = 1000 1111
     serial_number_item_formatted = sprintf('%05d',serial_number_item);
     assert(all( size(serial_number_item_formatted) == [ 1, 5 ]))
     
     s18ccode(19:23) = serial_number_item_formatted;
     if DEBUG
-        webcoder.console.log(sprintf('serial_number_item is: %05d',serial_number_item));
+        webcoder.console.log(sprintf('serial_number_item is: %s',serial_number_item_formatted));
     end
     
     %% field 8
-    tracking_indicator_bits = (135:136)+1; % hex 0-9;A-F
+    tracking_indicator_bits = ([(n-11):(n-10)])+1; % hex 0-9;A-F
 
     tracking = ['T','F','D','N']; % from 0 to 3
     tracking_indicator = tracking(1+parsebin2dec(binary(tracking_indicator_bits)));
@@ -535,8 +581,13 @@ function [exitcode,s18ccode,boundingbox] = detectHD(frame, row_count, col_count)
 %     s18ccode = sprintf('%c%s%s%s%c%02d%02d%02d%d%05d%c',UPU_identifier,format_identifier,issuer_code,...
 %         equipement_id,item_priority,serial_number_month,serial_number_day,serial_number_hour,...
 %         serial_number_10min,serial_number_item,tracking_indicator);
-    
-    if DEBUG
+
+
+    % Error correction
+%     error_correction_bits = 50:124;
+%     error_correction = binary(error_correction_bits);
+
+     if DEBUG
         webcoder.console.log(sprintf('final code is: %s',s18ccode));
     end
     

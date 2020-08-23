@@ -7,7 +7,7 @@ body {
     -webkit-touch-callout: none;                /* prevent callout to copy image, etc when tap to hold */
     -webkit-text-size-adjust: none;             /* prevent webkit from resizing text to fit */
     -webkit-user-select: none;                  /* prevent copy paste, to allow, change 'none' to 'text' */
-    background-color:#E4E4E4;
+    background-color:#F4F4F4;
     background-image:linear-gradient(to bottom, #E7E7E7 0%, #F4F4F4 51%);
     font-family: system-ui, -apple-system, -apple-system-font, 'Segoe UI', 'Roboto', sans-serif;
     font-size:12px;
@@ -36,7 +36,7 @@ img:active{
 }
 
 .container {
-	margin: 0 auto;
+	margin: 20px;
 	position: relative;
 }
 
@@ -46,6 +46,7 @@ video {
 	position: relative;
 	top: 0;
 	left: 0;
+	border: 2px solid #71c1ff;
 }
 
 canvas {
