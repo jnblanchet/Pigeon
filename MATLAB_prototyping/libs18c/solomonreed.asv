@@ -134,8 +134,8 @@ end
 size_error = length(error_pos_);
 b_(:, 1) = Syndromes_(1:size_error);
 for idx_ = 1 : size_error
-    e_ = galois_power( 2, (idx_ * (n - error_pos_))); % tHIS DOESN'T WORK
-    er_(idx_, :) = e_; 
+    e_ = galois_power( 2, (idx_ * (n - error_pos_)));
+    er_(idx_, :) = e_;
 end
 
 % Solve the linear system
