@@ -72,13 +72,14 @@ function getArchivedFiles(functionPerFile) {
 	});
 }
 
-function archiveObject(object) {
+function archiveObject(object, callback) {
 	// file writing function
 	function writeFile(fileEntry, dataObj) {
 		fileEntry.createWriter(function (fileWriter) {
 
 			fileWriter.onwriteend = function() {
-				// this may be useful for debugging.
+				if (callback)
+					callback();
 			};
 
 			fileWriter.onerror = handleError;
@@ -106,8 +107,12 @@ function readArchivedObject(name, applyLogic) {
 			var reader = new FileReader();
 			
 			reader.onloadend = e => {
-				let object = JSON.parse(reader.result);
-				applyLogic(object)
+				try {
+					let object = JSON.parse(reader.result);
+					applyLogic(object)
+				} catch(err) {
+					handleError("unable to parse json for file " + file);
+				}
 			};
 			
 			reader.readAsText(file);

@@ -14,9 +14,11 @@ document.getElementById("btnrestart").addEventListener("click", function(event){
   codeCapturedGUI(true);
 });
 
-document.getElementById("btnaccept").addEventListener("click", function(event){
-	if(validCodeCache)
-		archiveObject(validCodeCache); // write to storage (see storage.js)
+document.getElementById("btnaccept").addEventListener("click", function(event) {
+	if(validCodeCache) {
+		event.preventDefault();
+		archiveObject(validCodeCache, function(){window.location.replace("./index.html");}); // write to storage (see storage.js)
+	}
 });
 
 
