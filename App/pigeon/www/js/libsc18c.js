@@ -1292,11 +1292,11 @@ function updateGlobalBufferAndViews(buf) {
 }
 
 var STATIC_BASE = 1024,
-    STACK_BASE = 5249856,
+    STACK_BASE = 5250496,
     STACKTOP = STACK_BASE,
-    STACK_MAX = 6976,
-    DYNAMIC_BASE = 5249856,
-    DYNAMICTOP_PTR = 6816;
+    STACK_MAX = 7616,
+    DYNAMIC_BASE = 5250496,
+    DYNAMICTOP_PTR = 7456;
 
 assert(STACK_BASE % 16 === 0, 'stack must start aligned');
 assert(DYNAMIC_BASE % 16 === 0, 'heap must start aligned');
@@ -1822,6 +1822,7 @@ function getBinaryPromise() {
 }
 
 
+
 // Create the wasm instance.
 // Receives the wasm imports, returns the exports.
 function createWasm() {
@@ -1922,7 +1923,7 @@ var ASM_CONSTS = {
 
 
 
-// STATICTOP = STATIC_BASE + 5952;
+// STATICTOP = STATIC_BASE + 6592;
 /* global initializers */  __ATINIT__.push({ func: function() { ___wasm_call_ctors() } });
 
 
@@ -1979,7 +1980,7 @@ var ASM_CONSTS = {
     }
 
   function _emscripten_get_sbrk_ptr() {
-      return 6816;
+      return 7456;
     }
 
   function _emscripten_memcpy_big(dest, src, num) {

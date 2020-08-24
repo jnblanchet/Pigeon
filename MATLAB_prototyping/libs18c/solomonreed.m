@@ -94,7 +94,8 @@ end
 % magnitudes
 
 size_error = length(error_pos_);
-b_(:, 1) = Syndromes_(1:size_error);
+er_ = zeros(size_error,'uint32');
+b_ = Syndromes_(1:size_error)';
 for idx_ = size_error:-1:1
     e_ = galois_power( 2, (idx_ * (n - error_pos_))); % tHIS DOESN'T WORK
     er_(idx_, :) = e_; 
@@ -112,7 +113,14 @@ end
 
 % Remove leading zeros from Galois array
 function gt = trim_(g)
-    gt = g(find(g, 1):end);
+    valid = true(size(g));
+    for i=1:numel(g)
+        if g(i) > 0
+            break;
+        end
+        valid(i) = false;
+    end
+    gt = g(valid);
 end
 
 function xpad = pad_(x, k)
