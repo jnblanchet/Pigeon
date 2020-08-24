@@ -3,12 +3,14 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
 % any frame containing more pixels will not be accepted
 
     DEBUG = false;
-    % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
-    % % frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
+%     frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
+%     frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
 %     frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_100443.jpg');
 % frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_1004432.jpg');
 % frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175637.jpg');
-%     frame = imresize(frame,0.25);
+% frame = imread(sprintf('C:\\Users\\SPRTSTR\\Documents\\GitProjects\\d-code-competition\\MATLAB_prototyping\\data\\video2\\%05d.png',45));
+% frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\stream.png');
+% %     frame = imresize(frame,0.25);
 %     row_count = int32(size(frame,1));
 %     col_count = int32(size(frame,2));
 %     % % frame = imrotate(frame,90);
@@ -18,7 +20,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
 %     b = frame(:,:,3)';
 %     frame = [r(:)';g(:)';b(:)';z(:)'];
 %     frame = reshape(frame,[4, col_count, row_count]);
-    
+%     
     
     % check types and sizes
     assert(isa(row_count, 'int32'));
@@ -27,7 +29,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     assert(numel(col_count) == 1);
     
     assert(isa(frame, 'uint8'));
-    assert(all( size(frame) == [ 4, 3840, 2160])); % frames comes in as RGBA packed row major
+%     assert(all( size(frame) == [ 4, 3840, 2160])); % frames comes in as RGBA packed row major
     REAL_LEN = row_count * col_count * 4;
     assert((row_count * col_count * 4) <= REAL_LEN);
         
@@ -230,7 +232,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
 
     rot = @(angle) [cosd(angle), -sind(angle); sind(angle), cosd(angle)];
     rotated_bb = (rot(-orientation) * (pts)' + repmat(centroid',1,size(pts,1)));
-    W = ceil(max(rotated_bb(2,:)) - min(rotated_bb(2,:))) + 10; % extra padding to capture all the edges
+    W = ceil(max(rotated_bb(2,:)) - min(rotated_bb(2,:))) + 5; % extra padding to capture all the edges
     H = ceil(max(rotated_bb(1,:)) - min(rotated_bb(1,:))); 
 %     figure(1)
 %     imshow(best_bar_code)
@@ -367,7 +369,6 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     if n ~= 75
         exitcode = int32(-2);
     else
-
     sampling_centroid = zeros(1,75);
     sampling_count = zeros(1,75);
     for i=1:numel(cc)
@@ -399,27 +400,22 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         end
         
         expected_white = row1_profile_unfiltered(peak);
-        expected_black = min([row1_profile_unfiltered(bottom),...
-                            row0_profile(bottom),...
-                            row2_profile(bottom)]);
+        expected_black = min([row1_profile_unfiltered(bottom)]);
         
         % make it true if it's closer to the peak
         T(c) = abs(row0_profile(peak) - expected_white) < abs(row0_profile(peak) - expected_black);
         B(c) = abs(row2_profile(peak) - expected_white) < abs(row2_profile(peak) - expected_black);
     end
-
+    
     %% Parse binary string
     % top,bottom bits values: 00, 01, 10, 11 where 1 is white
     codes = ['T','D','A','F'];
     code_ = codes(1+T * 2 + B);
-%     code_ = 'FDFTTTAADDFDAFAAAFTTADTDAATTFFAAATFATDAAFAFDDFFDAFATAATFTDATFFDADFDADTFFDDT';
-%     code_ = 'DFDFFAADATFADFTDADFATFDDTDDTDDFTFTAFDFFATATTFADTFAATATAFATTDDTAFFDADFDFDFF';
-    % % % J18CUSA8E6N062315014880T
     % check orientation
     left_sync = code_(7:9);
     right_sync = code_(numel(code_)-8:numel(code_)-6);
     isvalid = true;
-    if ~isequal('AAD',left_sync) || ~isequal('DAD',right_sync)
+    if ~isequal('AAD',left_sync) || ~isequal('DAD',right_sync) % todo hamming 1?
         % if the sync codes are wrong, the code may be flipped
         codes = ['T','A','D','F'];
         code_ = codes(1+T(end:-1:1) * 2 + B(end:-1:1));
@@ -434,15 +430,43 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     if ~isvalid
         exitcode = int32(-4);
     else
+        
+        
+    %% Apply solomon reed error correction
+    % convert to decimal
+    fullBinary = true(2,75);
+    for i=1:numel(code_)
+        if code_(i) == 'F'
+            fullBinary(:,i) = [false; false];
+        elseif code_(i) == 'A'
+            fullBinary(:,i) = [false; true];
+        elseif code_(i) == 'D'
+            fullBinary(:,i) = [true; false];
+        end
+    end
+    fullBinary = fullBinary(:)';
+    decimal = sum(reshape(fullBinary,6,[])' .* repmat([32 16 8 4 2 1],25,1),2)';
+    
+    % apply correction
+    [corrected, ecc] = solomonreed(decimal);
+    code_dec = [corrected(1:10) ecc corrected(11:13)];
+%     code_dec = decimal
+    % convert back to code words
+    LUT =  ['FFF'; 'FFA'; 'FFD'; 'FFT'; 'FAF'; 'FAA'; 'FAD'; 'FAT';
+			'FDF'; 'FDA'; 'FDD'; 'FDT'; 'FTF'; 'FTA'; 'FTD'; 'FTT';
+			'AFF'; 'AFA'; 'AFD'; 'AFT'; 'AAF'; 'AAA'; 'AAD'; 'AAT';
+			'ADF'; 'ADA'; 'ADD'; 'ADT'; 'ATF'; 'ATA'; 'ATD'; 'ATT';
+			'DFF'; 'DFA'; 'DFD'; 'DFT'; 'DAF'; 'DAA'; 'DAD'; 'DAT';
+			'DDF'; 'DDA'; 'DDD'; 'DDT'; 'DTF'; 'DTA'; 'DTD'; 'DTT';
+			'TFF'; 'TFA'; 'TFD'; 'TFT'; 'TAF'; 'TAA'; 'TAD'; 'TAT';
+			'TDF'; 'TDA'; 'TDD'; 'TDT'; 'TTF'; 'TTA'; 'TTD'; 'TTT'];
+    code_(:) = LUT(code_dec+1,:)';
+
     % crop out sync codes, copy the rest to a new buffer
     valid = true(1,numel(code_));
     valid([7:9 numel(code_)-8:numel(code_)-6]) = false;
     code = code_(valid);
     buscode = code_; % copy the bus code to the returned buffer
-
-    % crop out ECC TODO: solomon reed correction
-    % ecc = code(59:70);
-    % code(59:70) = [];
 
     assert(all( size(code) == [1 69]));
     
