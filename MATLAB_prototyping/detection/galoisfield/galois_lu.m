@@ -25,7 +25,6 @@ function [L,U,P] = lu(A)
         %U(k+1:n,k) = U(k+1:n,k)/U(k,k);
         Ukk_inv= findinverse(U(k,k), GF_TABLE_PRIM_POLY, twos,GF_TABLE_M,q,...
             GF_TABLE1,GF_TABLE2);
-        Ukk_inv
         U(k+1:n,k)=galois_times(U(k+1:n,k),Ukk_inv(ones(n-k,1)),...
             GF_TABLE_PRIM_POLY,twos,GF_TABLE_M,q,GF_TABLE1,GF_TABLE2);
         % U(k+1:n,k+1:n) = U(k+1:n,k+1:n) - U(k+1:n,k)*U(k,k+1:n);

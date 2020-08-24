@@ -7,10 +7,11 @@ decimal = [8    63    22    34    17    20    61    46    23    48    21    49  
 msg = [decimal(1:10) decimal(23:25)];
 ecc = decimal(11:22);
 
+% no errors
 assert(isequal(solomonreed(decimal),msg),'errors found in uncorrupted message!');
 
-% corrupt
+% 1 corrupted bit
 assert(isequal(solomonreed([9 decimal(2:end)]),msg),'corrupted message was not corrected correctly!');
 
-% 5 bits wrong
+% 5 corrupted bits
 assert(isequal(solomonreed(decimal + double(mod(1:25,5) == 0)),msg),'corrupted message was not corrected correctly!');
