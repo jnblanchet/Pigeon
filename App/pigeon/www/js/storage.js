@@ -4,35 +4,36 @@ All rights reserved.
  */
  
  // the following functions are defined here:
-	// 1) getTimestampString()
-	//		example :
-	//			console.log(getTimestampString());
-	//					
-	// 2) getStorageFullPath()
-	//		example :
-	//			getStorageFullPath((path) => console.log(path));
-	//					
-	// 3) getArchivedFiles()
-	//		example :
-	//			getArchivedFiles((file) =>
-	//				console.log(file)
-	//			);
-	// 4) archiveObject(object)
-	//		example :
-	//			const data = [{
-	//				"data": "some data"
-	//			}];
-	//			archiveObject(data);
-	// 5) readobject(path)
-	//		example :
-	//			readArchivedObject("somefile.txt", (data) =>
-	//				console.log(data)
-	//			);
-	// 6) deleteFile(path)
-	//		example :
-	//			deleteFile("newPersistentFile.txt");
-	// 7) handleError: can be changed to support another error handling method
- 
+// 1) getTimestampString()
+//		example :
+//			console.log(getTimestampString());
+//					
+// 2) getStorageFullPath()
+//		example :
+//			getStorageFullPath((path) => console.log(path));
+//					
+// 3) getArchivedFiles()
+//		example :
+//			getArchivedFiles((file) =>
+//				console.log(file)
+//			);
+// 4) archiveObject(object)
+//		example :
+//			const data = [{
+//				"data": "some data"
+//			}];
+//			archiveObject(data);
+// 5) readobject(path)
+//		example :
+//			readArchivedObject("somefile.txt", (data) =>
+//				console.log(data)
+//			);
+// 6) deleteFile(path)
+//		example :
+//			deleteFile("newPersistentFile.txt");
+// 7) handleError: can be changed to support another error handling method
+
+
 function getTimestampString() {
 	var m = new Date();
 	var dateString = m.getFullYear() +"-"+
@@ -46,7 +47,7 @@ function getTimestampString() {
 }
 
 function getStorageFullPath(callback) {
-	window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) { callback(fs.root.fullPath)});
+	window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) { callback(fs.root.toURL())});
 }
 
 function getArchivedFiles(functionPerFile) {

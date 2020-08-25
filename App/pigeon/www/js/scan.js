@@ -119,7 +119,7 @@ function validCodeFound(scan_results){
 
 // frame grabber
 function runDetection() {
-	imageCapture.grabFrame() // todo takePicture() when a code is yellow?
+	imageCapture.grabFrame() // todo takePicture() when a code is yellow? (higher quality)
 		.then(function(imageBitmap) {
 			hiddenFrameCanvas.width = imageBitmap.width;
 			hiddenFrameCanvas.height = imageBitmap.height;

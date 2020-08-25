@@ -6,10 +6,9 @@ All rights reserved.
 document.addEventListener('deviceready', onDeviceReady, false);
 
 function onDeviceReady() {
-	
 	// display storage path
 	getStorageFullPath((path) => {
-		document.getElementById('divpath').innerHTML = "<p>Path to file storage on the device: <br /> <span style='font-weight: bold;'>" + path + "</span></p>"
+		document.getElementById('divpath').innerHTML = "<p>Device storage directory: <br /> <span style='font-weight: bold;'>" + path + "</span></p>"
 	});
 	
     // displayed populate storage files
@@ -40,27 +39,3 @@ function deleteAndRemoveEntry(fileName) {
 		deleteFile(fileName); // remove from storage
 	}
 }
-	
-	/*
-	// 1) getStorageFullPath()
-	console.log('getStorageFullPath(): ');
-	
-	// 2) getArchivedFiles()
-	console.log('getArchivedFiles(): ');
-	getArchivedFiles((file) =>
-		deleteFile(file)
-		//console.log(file)
-		);
-	// 3) archiveObject(object)
-	console.log(getTimestampString());
-	const data = [{
-	  "data": "some data"
-	}];
-	//archiveObject(data);
-	// 4) readobject(path)
-	readArchivedobject("2020-08-23_15-03-07.txt", (data) =>
-		console.log(data)
-	);
-	// 5) deleteFile(path)
-	deleteFile("newPersistentFile.txt");
-	*/
