@@ -11,7 +11,8 @@ for video = 5:5:900
     g = frame(:,:,2)';
     b = frame(:,:,3)';
     frame = [r(:)';g(:)';b(:)';z(:)'];
-    frame = reshape(frame,[4, col_count, row_count]);
+    frame(:,3840 * 2160) = 0;% extend buffer size to 4K
+    frame = reshape(frame,[4, 2160, 3840]);
     
     [exitcode,s18ccode,boundingbox] = detect(frame, row_count, col_count);
     total = total + 1;

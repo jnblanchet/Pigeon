@@ -14,7 +14,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     assert(isa(col_count, 'int32'));
     assert(numel(col_count) == 1);
     assert(isa(frame, 'uint8'));
-%     assert(all( size(frame) == [ 4, 3840, 2160])); % frames comes in as RGBA packed row major
+    assert(all( size(frame) == [ 4, 2160, 3840])); % frames comes in as RGBA packed row major
     REAL_LEN = row_count * col_count * 4;
     assert((row_count * col_count * 4) <= REAL_LEN);
     s18ccode = '000000000000000000000000';
