@@ -1,4 +1,4 @@
-
+addpath('galoisfield')
 rate = 0;
 total = 0;
 for video = 5:5:900

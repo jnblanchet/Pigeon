@@ -1,38 +1,22 @@
 function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_count) %#codegen
-% frame is a RGBA packed uint8 buffer of size 4K (maximum resolution)
-% any frame containing more pixels will not be accepted
+% this function performs S18C barcode detection with solomonreed error
+% correction on the specified frame, and returns the ID-Tag and the Bus Code
 
-    DEBUG = false;
-%     frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175602.jpg'),[1920 1080]);
-%     frame = imresize(imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\test3.png'),[1920 1080]);
-%     frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_100443.jpg');
-% frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200822_1004432.jpg');
-% frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\real2\IMG_20200817_175637.jpg');
-% frame = imread(sprintf('C:\\Users\\SPRTSTR\\Documents\\GitProjects\\d-code-competition\\MATLAB_prototyping\\data\\video2\\%05d.png',45));
-% frame = imread('C:\Users\SPRTSTR\Documents\GitProjects\d-code-competition\MATLAB_prototyping\data\stream.png');
-% %     frame = imresize(frame,0.25);
-%     row_count = int32(size(frame,1));
-%     col_count = int32(size(frame,2));
-%     % % frame = imrotate(frame,90);
-%     z = zeros(size(frame,[1 2]),'uint8');
-%     r = frame(:,:,1)';
-%     g = frame(:,:,2)';
-%     b = frame(:,:,3)';
-%     frame = [r(:)';g(:)';b(:)';z(:)'];
-%     frame = reshape(frame,[4, col_count, row_count]);
-%     
+% frame is a RGBA packed uint8 buffer of size 4K (maximum resolution)
+% any frame containing more pixels will not be accepted (this limit is
+% arbitray and can be changed easily)
+
+    DEBUG = false; % turn on to output trace to console. 
     
-    % check types and sizes
+    % initialize types and sizes (for compilation)
     assert(isa(row_count, 'int32'));
     assert(numel(row_count) == 1);
     assert(isa(col_count, 'int32'));
     assert(numel(col_count) == 1);
-    
     assert(isa(frame, 'uint8'));
-    assert(all( size(frame) == [ 4, 3840, 2160])); % frames comes in as RGBA packed row major
+%     assert(all( size(frame) == [ 4, 3840, 2160])); % frames comes in as RGBA packed row major
     REAL_LEN = row_count * col_count * 4;
     assert((row_count * col_count * 4) <= REAL_LEN);
-        
     s18ccode = '000000000000000000000000';
     buscode = '000000000000000000000000000000000000000000000000000000000000000000000000000'; % 75 characters
     exitcode = int32(0);
@@ -73,7 +57,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
                     atan(gy_buff(:,:,3)./(sqrt(gy_buff(:,:,1).^2+gy_buff(:,:,2).^2)))...
                  );
 
-    % accumulate featuresogram (in a c friendly way)
+    % accumulate featuresogram (in a compilation friendly way)
     N_BINS_P1 = 6;
     N_BINS_P2 = 6;
     N_BINS = N_BINS_P1 * N_BINS_P2;
@@ -113,6 +97,8 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         webcoder.console.log(sprintf('Computed feature histogram %d x %d.',int32(grid_y),int32(grid_x)));
     end
     %% Classify
+    % Weight matrix M is from linear regression on a training set of images that was manually labeled.
+    % To perform linear regression simply use M = feature \ label; where label is a binary vector.
     M = [    0.0527    1.5903    0.9982   -0.0369   -0.5392   -0.1954    0.1030    0.7808    2.9037   -0.8245   -1.3336   -1.5216    0.7569   -1.2331    0.1142   -0.4805    0.7901   -1.8255    1.6295   -2.3931   -0.4514   -0.0468   2.2480    0.8620   -1.4884   -1.3545   -0.4550   -0.5069    3.8599   -1.3284]';
     score = features * M; % eval
     score = reshape(score,grid_x,grid_y);
@@ -159,7 +145,8 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         end
     end
     
-    %% Find Barcode Candidates Regions       
+    %% Find Barcode Candidates Regions
+    % only the largest region is analysed
     [CC,n] = bwlabel(valid_);
     
     if DEBUG
@@ -189,6 +176,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     end
 
     %% Find bounding box, centroid, eccentricity and orientation
+    % if the largest region doesn't fit a the expected format, return error
     scale = size(f,1) / size(valid_,1);
     [idx,idy] = ind2sub(size(best_bar_code),find(best_bar_code));
         
@@ -219,17 +207,9 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     if eccentricity < 0.80
         % it does not look like a bar! the length-width ratio is off
         exitcode = int32(-1);
-    else
-%     figure(1)
-%     scatter(x,y)
-%     axis equal
-%     hold on
-%     quiver(centroid(1),centroid(2),V(1)*10,V(2)*10)
-%     quiver(centroid(1),centroid(2),V(3)*10,V(4)*10)
-%     hold off
-%     figure(2)
-%     imshow(imrotate(best_bar_code,-orientation))
-
+        return;
+    end
+        
     rot = @(angle) [cosd(angle), -sind(angle); sind(angle), cosd(angle)];
     rotated_bb = (rot(-orientation) * (pts)' + repmat(centroid',1,size(pts,1)));
     W = ceil(max(rotated_bb(2,:)) - min(rotated_bb(2,:))) + 5; % extra padding to capture all the edges
@@ -243,6 +223,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     
     
     %% Extract barcode ROI
+    % extract high resolution region of interest with bilinear interpolation
     scale = size(f,1) / size(best_bar_code,1);
 
     [yy,xx] = meshgrid(-W/2:W/2-1, -H/2:H/2-1);
@@ -277,23 +258,9 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     %     balance = balance ./ mean(balance);
     %     imbar = imbar ./ balance;
     
-    %% refine rotation
-    
-%     theta = [89.5:0.05:91.5];
-%     R = radon(imbar_score,theta);
-%     col = (1:size(R,1))';
-%     variance_per_angle = zeros(size(theta));
-%     for i=1:size(R,2)
-%         variance_per_angle(i) = std(col,R(:,i));
-%     end
-%     
-%     [~,bestangle] = min(variance_per_angle);
-%     bestangle = 90-theta(bestangle);
-%     
-%     imbar_score = imrotate(imbar_score,-bestangle,'crop');
-%     imshow(imbar_score)
-%     
     %% Refine ROI
+    % A better crop is identified, for the seleted region of interest
+    
     [H,W] = size(imbar_score);
     % find the top and the bottom
     vertical_profile = sum(imbar_score,2);
@@ -343,32 +310,25 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     row2_profile = mean(imbar_score_dilate(t1:end,:));
     
     % apply a laplacian filter to enhance peaks. kernel size is based on 800 px divided by 75 bars
+    % this works well because the center band of the signal is perfectly cyclical
     h = 2*[0.4490    0.3747    0.1853   -0.1663   -0.5111   -0.6667   -0.5111   -0.1663    0.1853    0.3747    0.4490 ];
     lap = conv([ones(1,5) * row1_profile_unfiltered(1), row1_profile_unfiltered, ones(1,5) * row1_profile_unfiltered(end)],h,'valid');
     row1_profile = row1_profile_unfiltered - lap;
     
-%     lap = conv([ones(1,5) * row0_profile(1), row0_profile, ones(1,5) * row0_profile(end)],h,'valid');
-%     row0_profile = row0_profile - lap;
-%     lap = conv([ones(1,5) * row2_profile(1), row2_profile, ones(1,5) * row2_profile(end)],h,'valid');
-%     row2_profile = row2_profile - lap;    
-%     
     % plot([row0_profile;row1_profile_unfiltered;row2_profile]'), legend({'top','center','bottom'})
     
     %% Extract Binary String
     H = hist(row1_profile,0:0.01:1);
-    threshC = otsuthresh(H);
-%     threshT = mean(row0_profile);
-%     threshB = mean(row2_profile);
-    
-    % because of the Laplacian enhancement, threshold for row0 and row2 can be much higher
-%     T = row0_profile > threshT; % top
+    threshC = otsuthresh(H);    
     C = row1_profile > threshC; % center
-%     B = row2_profile > threshB; % bottom
 
+    % we're looking for 75 bars
     [cc,n] = bwlabel(C);
     if n ~= 75
         exitcode = int32(-2);
-    else
+        return;
+    end
+    
     sampling_centroid = zeros(1,75);
     sampling_count = zeros(1,75);
     for i=1:numel(cc)
@@ -383,9 +343,11 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     % the center bar should be only ones
     if sum(C(sampling_centroid)) ~= 75
         exitcode = int32(-3);
-    else
+        return;
+    end
 
-        
+    % if 75 good bars were found, we can read the top and bottom row
+    % which contain the binary signal
     T = false(1,75);
     B = false(1,75);
     for c=1:numel(sampling_centroid)
@@ -407,7 +369,10 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         B(c) = abs(row2_profile(peak) - expected_white) < abs(row2_profile(peak) - expected_black);
     end
     
-    %% Parse binary string
+    %% Identify code orientation
+    % we're are allowing 1 error to occur in the sync codes, as it will be
+    % corrected later with the solomon reed error correction method.
+    
     % top,bottom bits values: 00, 01, 10, 11 where 1 is white
     codes = ['T','D','A','F'];
     code_ = codes(1+T * 2 + B);
@@ -415,22 +380,25 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     left_sync = code_(7:9);
     right_sync = code_(numel(code_)-8:numel(code_)-6);
     isvalid = true;
-    if ~isequal('AAD',left_sync) || ~isequal('DAD',right_sync) % todo hamming 1?
+    if sum('AADDAD' == [left_sync right_sync]) < 5 % 1 character can be wrong
         % if the sync codes are wrong, the code may be flipped
         codes = ['T','A','D','F'];
         code_ = codes(1+T(end:-1:1) * 2 + B(end:-1:1));
         left_sync = code_(7:9);
         right_sync = code_(numel(code_)-8:numel(code_)-6);
-        if ~isequal('AAD',left_sync) || ~isequal('DAD',right_sync)
+        if sum('AADDAD' == [left_sync right_sync]) < 5
             % error: code was misread because the sync codes are wrong
             isvalid = false;
         end
     end
+    % we tolerate 1 wrong bar, so we'll fix it
+    code_(7:9) = 'AAD';
+    code_(numel(code_)-8:numel(code_)-6) = 'DAD';
     
     if ~isvalid
         exitcode = int32(-4);
-    else
-        
+        return;
+    end
         
     %% Apply solomon reed error correction
     % convert to decimal
@@ -600,13 +568,9 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     end
 
     %% field 7 (note: 18D not implemented)
-
     n = numel(binary)-1;
     serial_number_item_bits = ([(n-9):n])+1;
     serial_number_item = int32(parsebin2dec([binary(serial_number_item_bits)]));
-    % TODO: remove err correction code before this point
-% 142 = 1000 1110
-% 143 = 1000 1111
     serial_number_item_formatted = sprintf('%05d',serial_number_item);
     assert(all( size(serial_number_item_formatted) == [ 1, 5 ]))
     
@@ -626,25 +590,12 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         webcoder.console.log(sprintf('tracking is: %c',tracking_indicator));
     end
     
-%     s18ccode = sprintf('%c%s%s%s%c%02d%02d%02d%d%05d%c',UPU_identifier,format_identifier,issuer_code,...
-%         equipement_id,item_priority,serial_number_month,serial_number_day,serial_number_hour,...
-%         serial_number_10min,serial_number_item,tracking_indicator);
-
-
-    % Error correction
-%     error_correction_bits = 50:124;
-%     error_correction = binary(error_correction_bits);
-
-     if DEBUG
+    if DEBUG
         webcoder.console.log(sprintf('final code is: %s',s18ccode));
     end
     
-    end % if error, skip the rest
-    end
-    end
-    end
-    %% return
     
+    %% set return values for compilation purposes
     assert(isa(s18ccode, 'char'));
     assert(all( size(s18ccode) == [ 1, 24 ]))
     assert(isa(buscode, 'char'));
