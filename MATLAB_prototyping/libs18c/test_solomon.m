@@ -26,7 +26,7 @@ assert(isequal(solomonreed(decimal + double(mod(1:25,6) == 0)),msg),'corrupted m
 % 5 corrupted bits
 assert(isequal(solomonreed(decimal + double(mod(1:25,5) == 0)),msg),'corrupted message was not corrected correctly!');
 
-% 5% 5 corrupted bits
+% 6 corrupted bits
 assert(isequal(solomonreed(decimal + double(mod(1:25,4) == 0)),msg),'corrupted message was not corrected correctly!');
 
 
