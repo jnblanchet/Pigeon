@@ -1,4 +1,4 @@
-function [corrected, ecc] = solomonreed(codewords_decimal)
+function [corrected, ecc, numerr] = solomonreed(codewords_decimal)
 % Define some constants defined by the S18 standard
 m = 6;
 prim_poly = 67;
@@ -29,6 +29,7 @@ Synd_ = galois_polyval(encoded_, alpha_power);
 Syndromes_ = trim_(Synd_);
 
 % If all syndromes are zeros (perfectly divisible) there are no errors
+numerr = uint32(0);
 if isempty(Syndromes_)
     corrected = orig_vals(1:k);
     return;
@@ -81,10 +82,12 @@ g_ = trim_(g_);
 alpha_poly = [17   41   53   59   60   30   15   38   19   40   20   10    5   35   48   24   12    6    3   32   16    8    4    2    1];
 evalPoly_ = galois_polyval(g_,alpha_poly);
 error_pos_ = find(evalPoly_ == 0);
+numerr = uint32(numel(error_pos_));
 
 % If no error position is found we return the received work, because
 % basically is nothing that we could do and we return the received message
 if isempty(error_pos_)
+    numerr = uint32(99); % everything is wrong
     corrected = orig_vals(1:k);
     return;
 end

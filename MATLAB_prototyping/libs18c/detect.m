@@ -263,8 +263,8 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     
     [H,W] = size(imbar_score);
     % find the top and the bottom
-    vertical_profile = sum(imbar_score,2);
-    T = mean(vertical_profile)*1; % The vertical profile has more white than black. this heuristic gives us a good threshold.
+    vertical_profile = prctile(imbar_score,90,2);
+    T = max(vertical_profile)/1.5;
     span = [1 1];
     for i=round(H/2):-1:1 % find upper bound
         if vertical_profile(i) < T
@@ -279,7 +279,6 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         end
     end
     imbar_score = imbar_score(span(1):span(2),:);
-
     
     horizontal_profile = sum(imbar_score,1);
     T = mean(horizontal_profile);
@@ -304,7 +303,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
             imbar_score_dilate(i,j) = max(imbar_score(i,max(1,j-w):min(j+w,W)));
         end
     end   
-    
+        
     row0_profile = mean(imbar_score_dilate(1:t0,:));
     row1_profile_unfiltered = mean(imbar_score_dilate(t0+1:t1,:));
     row2_profile = mean(imbar_score_dilate(t1:end,:));
@@ -345,7 +344,15 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         exitcode = int32(-3);
         return;
     end
-
+    
+    % check uniformity of distribution
+    spread = (sampling_centroid(2:75) - sampling_centroid(1:74));
+    if sum(spread < 8 | spread > 12) > 0
+        exitcode = int32(-3);
+        return;
+    end
+    
+        
     % if 75 good bars were found, we can read the top and bottom row
     % which contain the binary signal
     T = false(1,75);
@@ -399,7 +406,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         exitcode = int32(-4);
         return;
     end
-        
+    
     %% Apply solomon reed error correction
     % convert to decimal
     fullBinary = true(2,75);
@@ -416,7 +423,12 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     decimal = sum(reshape(fullBinary,6,[])' .* repmat([32 16 8 4 2 1],25,1),2)';
     
     % apply correction
-    [corrected, ecc] = solomonreed(decimal);
+    [corrected, ecc, errorcount] = solomonreed(decimal);
+    if errorcount > 6
+        exitcode = int32(-5);
+        return;
+    end
+    
     code_dec = [corrected(1:10) ecc corrected(11:13)];
 %     code_dec = decimal
     % convert back to code words
@@ -502,18 +514,30 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     % issuer_code_id = 16003;
     % issuer_code_id = parsebin2dec([0 0 1 0 0 0 0 0 0 1 1 1 0 0 0 1]);
     % pzw
+    
     issuer_code_id_1 = floor((issuer_code_id) / 1600);
-    issuer_code_1 = alphabet_table1(issuer_code_id_1+1);
-
     issuer_code_id_2 = floor(mod((issuer_code_id),1600)/40);
-    issuer_code_2 = alphabet_table1(issuer_code_id_2+1);
-
     issuer_code_id_3 = floor(mod((issuer_code_id),40));
+    
+     % should always be between 0 and 35
+    if issuer_code_id_1 > 35 || issuer_code_id_2 > 35 || issuer_code_id_3 > 35
+        exitcode = int32(-4);
+        return;
+    end
+    issuer_code_1 = alphabet_table1(issuer_code_id_1+1);
+    issuer_code_2 = alphabet_table1(issuer_code_id_2+1);
     issuer_code_3 = alphabet_table1(issuer_code_id_3+1);
 
-    issuer_code = [issuer_code_1, issuer_code_2, issuer_code_3];
 
+
+    issuer_code = [issuer_code_1, issuer_code_2, issuer_code_3];
+    if ~isequal(issuer_code,'PTA') && errorcount >= 3
+        % this is less likely to happen, so if there are more than 2 errors in the code, we'll pass on this frame to increase probability of reading the code right
+        exitcode = int32(-4);
+        return;
+    end
     s18ccode(5:7) = issuer_code;
+    
     if DEBUG
         webcoder.console.log(sprintf('issuer_code is: %s',char(issuer_code)));
     end
@@ -558,6 +582,13 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     serial_number_day = int32(floor(mod(serial_number,5120)/160));
     serial_number_hour = int32(floor(mod(serial_number,160)/6));
     serial_number_10min = int32(mod(mod(serial_number,160),6));
+    
+    if serial_number_month > 12 || serial_number_day > 32 || serial_number_hour > 24 || serial_number_10min > 6
+        exitcode = int32(-4);
+        return;
+    end
+    
+    
     
     serial_number_formatted = sprintf('%02d%02d%02d%d',serial_number_month,serial_number_day,serial_number_hour,serial_number_10min);
     assert(all( size(serial_number_formatted) == [ 1, 7 ]))
