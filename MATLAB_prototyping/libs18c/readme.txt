@@ -25,5 +25,6 @@ build_helper.m
 Tested on Windows, with MATLAB 2019b and MinGW64 Compiler (C++).
 
 
+## Compatibility
 
-
+The code was written to avoid MATLAB dependencies as much as possible (hence the lengthy code), to allow compatibility with Octave, simplify the compilation process, and to simplify eventual translation to a different programming langugage.
