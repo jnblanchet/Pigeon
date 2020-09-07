@@ -12,7 +12,7 @@ function onDeviceReady() {
 	});
 	
     // displayed populate storage files
-	getArchivedFiles((file) => {
+	getArchivedFiles((file, id) => {
 		readArchivedObject(file, (data) => {
 			var node = document.createElement('div');
 			node.id = "div"+file;
@@ -27,10 +27,27 @@ function onDeviceReady() {
 			"<img src='" + data.picture + "' class='thumbnail' />" +
 			"</div>" + 
 			"</div>";
-			document.getElementById('divhistory').appendChild(node);
+			addDivs(id);
+			document.getElementById("divhistory"+id).appendChild(node);
+			//alert(id);
 		});
 	});
 }
+
+var div_count = 0;
+function addDivs(id) {
+	if (div_count < id)
+	{
+		while (div_count <= id)
+		{
+			var node = document.createElement('div');
+			node.id = "divhistory"+div_count;
+			document.getElementById('divhistory').appendChild(node);
+			div_count++;
+		}
+	}
+}
+
 
 function deleteAndRemoveEntry(fileName) {
 	if (confirm("Delete " + fileName + "?"))

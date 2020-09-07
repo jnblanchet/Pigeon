@@ -26,4 +26,7 @@
         <allow-intent href="itms-apps:*" />
     </platform>
 	<icon src="www/img/icon.png" width="64" height="64" density="mdpi" />
+	<preference name="AndroidPersistentFileLocation" value="Compatibility" />
+	<preference name="AndroidExtraFilesystems" value="files,cache, sdcard, cache-external, files-external" />
+
 </widget>

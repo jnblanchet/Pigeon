@@ -6,6 +6,7 @@ All rights reserved.
 var imageCapture;
 var hiddenFrameCanvas = document.createElement("canvas"); // used to convert imageBitmap into pixel data
 var validCodeCache = [];
+var lastCode = "";
 
 document.addEventListener('deviceready', onDeviceReady, false);
 document.getElementById("btnrestart").addEventListener("click", function(event){
@@ -115,6 +116,7 @@ function validCodeFound(scan_results){
 	codeCapturedGUI(false);
 	stopCamera();
 	validCodeCache = scan_results;
+	lastCode = "";
 }
 
 // frame grabber
@@ -124,8 +126,9 @@ function runDetection() {
 			hiddenFrameCanvas.width = imageBitmap.width;
 			hiddenFrameCanvas.height = imageBitmap.height;
 			var ctx = hiddenFrameCanvas.getContext("2d");
+			var offset_H = Math.round(hiddenFrameCanvas.height / 4);
 			ctx.drawImage(imageBitmap, 0, 0);
-			var imgData = ctx.getImageData(0, 0, hiddenFrameCanvas.width, hiddenFrameCanvas.height);
+			var imgData = ctx.getImageData(0, offset_H, hiddenFrameCanvas.width, hiddenFrameCanvas.height - 2*offset_H);
 			scan_results = runLibs18cDetection(imgData);
 			
 			var canvas = document.querySelector('#canvasoverlay');
@@ -135,24 +138,37 @@ function runDetection() {
 			
 			ctx.beginPath();
 			ctx.lineWidth = "6";
-			if (scan_results.exitcode == 0) {
+			
+			var done = false;
+			if (scan_results.exitcode == 0 && !(lastCode === scan_results.idtag))
+			{
+				lastCode = scan_results.idtag;
+				ctx.strokeStyle = "blue";
+			}
+			else if (scan_results.exitcode == 0 && lastCode === scan_results.idtag)
+			{
 				// success!
 				ctx.strokeStyle = "green";
 				ctx.drawImage(imageBitmap, 0, 0); // freeze on the good frame.
 				scan_results.picture = hiddenFrameCanvas.toDataURL('image/jpeg', 0.95);
 				validCodeFound(scan_results);
+				done = true;
 			}
 			else if (scan_results.exitcode == -1)
 			{
 				ctx.strokeStyle = "red";
 			}
-			else
+			else if (scan_results.exitcode == -2)
 			{
 				ctx.strokeStyle = "yellow";
 			}
+			else
+			{
+				ctx.strokeStyle = "orange";
+			}
 			
 			// display rectangular region of interest (user feedback)
-			ctx.rect(scan_results.roi[0], scan_results.roi[1], scan_results.roi[2]-scan_results.roi[0], scan_results.roi[3]-scan_results.roi[1]);
+			ctx.rect(scan_results.roi[0], scan_results.roi[1] + offset_H, scan_results.roi[2]-scan_results.roi[0], scan_results.roi[3]-scan_results.roi[1]);
 			ctx.stroke();
 			
 			// display result message (etiher IDTag or output message)
@@ -160,13 +176,13 @@ function runDetection() {
 			{
 				ctx.fillStyle = "green";
 				ctx.font = '24px serif';
-				ctx.fillText(scan_results.idtag, 10, 50);
+				ctx.fillText(scan_results.idtag, 20, 50);
 			}
 			else
 			{
 				ctx.fillStyle = "red";
 				ctx.font = '24px serif';
-				ctx.fillText(scan_results.msg, 10, 50);
+				ctx.fillText(scan_results.msg, 20, 50);
 			}
 			
 			// avoid memory leaks
@@ -174,7 +190,7 @@ function runDetection() {
 			ctx = null;
 			
 			// request another detection if the code was not found.
-			if (scan_results.exitcode != 0)
+			if (!done)
 				requestAnimationFrame(runDetection);
 	})
 	.catch(function(error) {

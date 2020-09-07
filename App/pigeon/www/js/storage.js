@@ -46,8 +46,13 @@ function getTimestampString() {
 	return dateString;
 }
 
-function getStorageFullPath(callback) {
-	window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) { callback(fs.root.toURL())});
+function getStorageFullPath(callback)
+{
+	window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) {
+		var absPath = cordova.file.externalRootDirectory;
+		var fileDir = cordova.file.externalDataDirectory.replace(cordova.file.externalRootDirectory, '');
+		callback(fileDir);
+	}, handleError);
 }
 
 function getArchivedFiles(functionPerFile) {
@@ -56,20 +61,44 @@ function getArchivedFiles(functionPerFile) {
 		function readDirectory(directory) {
 			let dirReader = directory.createReader();
 			let entries = new Array();
-
+			
 			let getEntries = function() {
 				dirReader.readEntries(function(results) {
-				if (results.length) {
-					for (var file in results)
-						functionPerFile(results[file].name);
-					getEntries();
-				}
-				}, handleError
-				);
+					if (results.length) {
+						for (var file in results)
+						{
+							entries.push(results[file]);
+							//functionPerFile(results[file].name);
+						}
+						getEntries();
+					}
+					else // no more entries, sort and apply logic
+					{
+						entries.sort(function (a, b) {
+						if (a.name > b.name) { // sort descendant alphabetically
+							return -1;
+						}
+						if (b.name > a.name) {
+							return 1;
+						}
+							return 0;
+						});
+						
+						let id = 0;
+						for (var file in entries)
+						{
+							functionPerFile(entries[file].name, id++);
+						}
+					}
+				}, handleError);
 			};
 			getEntries();
 		}
-		readDirectory(fs.root);
+		var absPath = cordova.file.externalRootDirectory;
+		var fileDir = cordova.file.externalDataDirectory.replace(cordova.file.externalRootDirectory, '');
+		fs.root.getDirectory(fileDir, { create: true }, function (dir) {
+			readDirectory(dir);
+		});
 	});
 }
 
@@ -94,10 +123,14 @@ function archiveObject(object, callback) {
 
 	// request the creation of a new file, and write the data to the new file
 	window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) {
-		fs.root.getFile(getTimestampString() + ".txt", { create: true, exclusive: false }, function (fileEntry) {
-				writeFile(fileEntry, blob);
+		var absPath = cordova.file.externalRootDirectory;
+		var fileDir = cordova.file.externalDataDirectory.replace(cordova.file.externalRootDirectory, '');
+		var fileName = getTimestampString() + ".json";
+		var filePath = fileDir + fileName;
+		fs.root.getFile(filePath, { create: true, exclusive: false }, function (fileEntry) {
+			writeFile(fileEntry, blob);
 		}, handleError);
-	});
+	}, handleError);
 }
 
 
@@ -121,24 +154,28 @@ function readArchivedObject(name, applyLogic) {
 	}
 	// request the file handle
 	window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) {
-		fs.root.getFile(name, { create: false, exclusive: false }, function (fileEntry) {
+		var absPath = cordova.file.externalRootDirectory;
+		var fileDir = cordova.file.externalDataDirectory.replace(cordova.file.externalRootDirectory, '');
+		var filePath = fileDir + name;
+		fs.root.getFile(filePath, { create: false }, function (fileEntry) {
 			readFile(fileEntry);
 		}, handleError);
-	});
-
+	}, handleError);
 }
 
-function deleteFile(path) {
+function deleteFile(name) {
 	// request the file, and delete it
 	window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) {
-		fs.root.getFile(path, { create: false }, function (fileEntry) {
+		var absPath = cordova.file.externalRootDirectory;
+		var fileDir = cordova.file.externalDataDirectory.replace(cordova.file.externalRootDirectory, '');
+		var filePath = fileDir + name;
+		fs.root.getFile(filePath, { create: false }, function (fileEntry) {
 			fileEntry.remove(
 				function () {
 					// this may be useful for debugging
 				}, handleError);
-		
 		}, handleError);
-	});
+	}, handleError);
 }
 
 function handleError(err)
