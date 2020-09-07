@@ -10,24 +10,31 @@ ecc = decimal(11:22);
 
 % no errors
 assert(isequal(solomonreed(decimal),msg),'errors found in uncorrupted message!');
-
 % 1 corrupted bit
 assert(isequal(solomonreed([9 decimal(2:end)]),msg),'corrupted message was not corrected correctly!');
 
-% 2 corrupted bits
-assert(isequal(solomonreed(decimal + double(mod(1:25,10) == 0)),msg),'corrupted message was not corrected correctly!');
+for offset = -12:12 %  repeat corrupting different bits
+    range = (1:25) + offset;
+    corrupt = @(msg,step) min(63,decimal + double(mod(range,25) == 0));
+    % 1 corrupted bit
+    assert(isequal(solomonreed(corrupt(decimal,25)),msg),'corrupted message was not corrected correctly!');
 
-% 3 corrupted bits
-assert(isequal(solomonreed(decimal + double(mod(1:25,7) == 0)),msg),'corrupted message was not corrected correctly!');
+    % 2 corrupted bits
+    assert(isequal(solomonreed(corrupt(decimal,10)),msg),'corrupted message was not corrected correctly!');
 
-% 4 corrupted bits
-assert(isequal(solomonreed(decimal + double(mod(1:25,6) == 0)),msg),'corrupted message was not corrected correctly!');
+    % 3 corrupted bits
+    assert(isequal(solomonreed(corrupt(decimal,7)),msg),'corrupted message was not corrected correctly!');
 
-% 5 corrupted bits
-assert(isequal(solomonreed(decimal + double(mod(1:25,5) == 0)),msg),'corrupted message was not corrected correctly!');
+    % 4 corrupted bits
+    assert(isequal(solomonreed(corrupt(decimal,6)),msg),'corrupted message was not corrected correctly!');
 
-% 6 corrupted bits
-assert(isequal(solomonreed(decimal + double(mod(1:25,4) == 0)),msg),'corrupted message was not corrected correctly!');
+    % 5 corrupted bits
+    assert(isequal(solomonreed(corrupt(decimal,5)),msg),'corrupted message was not corrected correctly!');
+
+    % 6 corrupted bits
+    assert(isequal(solomonreed(corrupt(decimal,4)),msg),'corrupted message was not corrected correctly!');
+
+end
 
 
 disp('all tests passed!')
