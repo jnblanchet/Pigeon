@@ -103,7 +103,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     score = features * M; % eval
     score = reshape(score,grid_x,grid_y);
     score = (score - min(score(:))) / (max(score(:)) - min(score(:)));
-    valid = score > prctile(score(:),98);
+    valid = score > prctile(score(:),96);% we use 96 instead of 98, because we are using a half-frame in the app: 98 is good for uncropped frames
 
     if DEBUG
         webcoder.console.log(sprintf('Found %d bar-like cells out of %d across the image.',int32(sum(valid(:))),int32(numel(valid))));    
@@ -259,13 +259,12 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     %     imbar = imbar ./ balance;
     
     %% Refine ROI
-    % A better crop is identified, for the seleted region of interest
-    
+    % A better crop is identified, for the seleted region of interest    
     [H,W] = size(imbar_score);
     % find the top and the bottom
     vertical_profile = prctile(imbar_score,90,2);
-    T = max(vertical_profile)/1.5;
-    span = [1 1];
+    T = vertical_profile(round(H/2))/1.5;% the center is expected to be the barcode
+    span = [1 H];
     for i=round(H/2):-1:1 % find upper bound
         if vertical_profile(i) < T
             span(1) = i;
@@ -286,7 +285,8 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     span = [max(1,peaks(1)-2) min(W,peaks(end)+2)];
     imbar_score = imbar_score(:,span(1):span(2));
     
-    % imshow(imbar_score,[])
+%     imshow(imbar_score,[])
+%     pause;
 
     [H,W] = size(imbar_score);
     t0 = round(H/3);
@@ -296,9 +296,9 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     imbar_score_dilate = zeros(size(imbar_score));
     for i = 1:size(imbar_score_dilate,1)
         w = 1;
-        if i <= t0 || i >= t1
-            w = 2;
-        end
+%         if i <= t0 || i >= t1
+%             w = 2;
+%         end
         for j = 1:size(imbar_score_dilate,2)
             imbar_score_dilate(i,j) = max(imbar_score(i,max(1,j-w):min(j+w,W)));
         end
@@ -314,36 +314,50 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     lap = conv([ones(1,5) * row1_profile_unfiltered(1), row1_profile_unfiltered, ones(1,5) * row1_profile_unfiltered(end)],h,'valid');
     row1_profile = row1_profile_unfiltered - lap;
     
-    % plot([row0_profile;row1_profile_unfiltered;row2_profile]'), legend({'top','center','bottom'})
+    lap = conv([ones(1,5) * row0_profile(1), row0_profile, ones(1,5) * row0_profile(end)],h,'valid');
+    row0_profile = row0_profile - lap*0.25;
+    
+    lap = conv([ones(1,5) * row2_profile(1), row2_profile, ones(1,5) * row2_profile(end)],h,'valid');
+    row2_profile = row2_profile - lap*0.25;
+    
+%     plot([row0_profile;row1_profile_unfiltered;row2_profile]'), legend({'top','center','bottom'})
     
     %% Extract Binary String
-    H = hist(row1_profile,0:0.01:1);
-    threshC = otsuthresh(H);    
-    C = row1_profile > threshC; % center
-
-    % we're looking for 75 bars
-    [cc,n] = bwlabel(C);
+%     H = hist(row1_profile,0:0.01:1);
+%     threshC = otsuthresh(H);    
+%     C = row1_profile > threshC; % center
+% 
+%     % we're looking for 75 bars
+%     [cc,n] = bwlabel(C);
+%     if n ~= 75
+%         exitcode = int32(-2);
+%         return;
+%     end
+%     
+%     sampling_centroid = zeros(1,75);
+%     sampling_count = zeros(1,75);
+%     for i=1:numel(cc)
+%         lbl = cc(i);
+%         if lbl > 0
+%             sampling_centroid(lbl) = sampling_centroid(lbl) + i;
+%             sampling_count(lbl) = sampling_count(lbl) + 1;
+%         end
+%     end
+%     sampling_centroid = round(sampling_centroid ./ sampling_count);
+% 
+%     the center bar should be only ones
+%     if sum(C(sampling_centroid)) ~= 75
+%         exitcode = int32(-3);
+%         return;
+%     end
+    
+    [~,sampling_centroid] = findpeaks(row1_profile,'NPeaks',75,'MinPeakDistance',6); %54.44
+    n = numel(sampling_centroid);
     if n ~= 75
         exitcode = int32(-2);
         return;
     end
     
-    sampling_centroid = zeros(1,75);
-    sampling_count = zeros(1,75);
-    for i=1:numel(cc)
-        lbl = cc(i);
-        if lbl > 0
-            sampling_centroid(lbl) = sampling_centroid(lbl) + i;
-            sampling_count(lbl) = sampling_count(lbl) + 1;
-        end
-    end
-    sampling_centroid = round(sampling_centroid ./ sampling_count);
-
-    % the center bar should be only ones
-    if sum(C(sampling_centroid)) ~= 75
-        exitcode = int32(-3);
-        return;
-    end
     
     % check uniformity of distribution
     spread = (sampling_centroid(2:75) - sampling_centroid(1:74));
@@ -357,24 +371,63 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
     % which contain the binary signal
     T = false(1,75);
     B = false(1,75);
+    
+%     expected_white
+lows = round((sampling_centroid(1:74) + sampling_centroid(2:75))/2);
+
+expected_black = mean(row0_profile(lows));
+
+    
     for c=1:numel(sampling_centroid)
         peak = sampling_centroid(c);
-        if c==1
-            bottom = round((sampling_centroid(c) + sampling_centroid(c+1))/2);
-        elseif c==numel(sampling_centroid)
-            bottom = round((sampling_centroid(c-1) + sampling_centroid(c))/2);
-        else
-            bottom = [round((sampling_centroid(c-1) + sampling_centroid(c))/2), ...
-                      round((sampling_centroid(c+1) + sampling_centroid(c))/2)];
-        end
-        
         expected_white = row1_profile_unfiltered(peak);
-        expected_black = min([row1_profile_unfiltered(bottom)]);
         
         % make it true if it's closer to the peak
-        T(c) = abs(row0_profile(peak) - expected_white) < abs(row0_profile(peak) - expected_black);
-        B(c) = abs(row2_profile(peak) - expected_white) < abs(row2_profile(peak) - expected_black);
+        sampleT = mean(row0_profile(peak));
+        sampleB = mean(row2_profile(peak));
+        T(c) = abs(sampleT - expected_white) < abs(sampleT - expected_black);
+        B(c) = abs(sampleB - expected_white) < abs(sampleB - expected_black);
     end
+    
+    % This block is very useful for debugging the binarization.
+    % We will leave it here for future use.
+%     T_gt = [    0   0   1   1   1   0   1   0   1   0   0   0   0   0   1   1   1   1   0   1   0   1   1   1   0   0   0   1   1   1   0   0   0   1   1   1   1   0   1   0   0   0   1   1   1   1   1   0   0   0   1   1   0   1   1   0   1   0   0   0   0   1   0   1   1   1   1   0   0   0   0   0   1   1   1];
+%     B_gt = [    1   0   1   0   1   0   0   1   0   0   0   0   1   0   1   1   1   1   0   0   0   0   0   0   1   1   1   1   1   1   1   1    1   1   0   1   1   0   1   0   1   1   0   0   1   1   1   0   1   0   0   0   1   1   0   0   1   1   1   1   1   1   1   0   1   0   0   1   1   0   0   0   1   0   1];
+%     figure(1),
+%     subplot(2,1,1)
+%     plot([row0_profile;row1_profile_unfiltered;row2_profile]'), legend({'top','center','bottom'})
+%     xlim([1 size(imbar_score_dilate,2)]);
+%     title('intensity signal');
+%     xlabel('pixels')
+%     ylabel('intensity')
+%     
+%     
+%     subplot(2,1,2);
+%     imshow(imbar_score_dilate,[]);
+%     hold on
+%     for i=1:75
+%         color = 'red';
+%         color0 = [1 0 0];
+%         if T_gt(i) == T(i)
+%             color = 'green';
+%             color0 = [0 1 0];
+%         end
+%         scatter(sampling_centroid(i),4,10,color0,'filled')
+%         text(sampling_centroid(i),10,char(num2str(T(i))),'Color',color)
+%     end
+%     
+%     for i=1:75
+%         color = 'red';
+%         color0 = [1 0 0];
+%         if B_gt(i) == B(i)
+%             color = 'green';
+%             color0 = [0 1 0];
+%         end
+%         scatter(sampling_centroid(i),size(imbar_score_dilate,1)-4,10,color0,'filled')
+%         text(sampling_centroid(i),size(imbar_score_dilate,1)-10,char(num2str(B(i))),'Color',color)
+%     end
+%     hold off
+%     pause
     
     %% Identify code orientation
     % we're are allowing 1 error to occur in the sync codes, as it will be
@@ -428,7 +481,7 @@ function [exitcode,s18ccode,buscode,boundingbox] = detect(frame, row_count, col_
         exitcode = int32(-5);
         return;
     end
-    
+       
     code_dec = [corrected(1:10) ecc corrected(11:13)];
 %     code_dec = decimal
     % convert back to code words
