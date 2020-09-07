@@ -19,6 +19,7 @@ Submission for the d-Code CTT postal service competition 2020.
  * Photographs stored with meta data in JSON files 💾
  * History browsing 📋, and deletion ❌
  * Visual user feedback while scanning 🟥🟨🟩
+ * Double check feature: an ID-Tag is only returned after two consecutive reads
  * The phone's flash light is used to remove shadows and improve detection 💡
  * Works in daylight 🌞, indoors, and low light conditions 🌙
  * Solomon-Reed error correction 🚫 to correct up to 6 binary errors (unit tested)
@@ -40,6 +41,8 @@ Submission for the d-Code CTT postal service competition 2020.
 ## Scanning a new ID-Tag
 
 From the main menu, select the scan option on the left. Once the camera is started hold the envelope 15 cm away from the camera. There are no prior assumptions on the position or orientation of the barcode. The phone and the camera should be parallel to each other for best results.
+
+If you are having trouble scanning a barcode, try these: press the envelope against a flat surface, slowly rotate the phone to improve the angle, try moving around to improve the lighting.
 
 When the barcode is successfully detected, the ID-Tag information is displayed on screen. The formatting output of this code is likely to evolve in the future, and can be changed easily by updating the scan.HTML and scan.js files.
 
@@ -93,14 +96,9 @@ While the detection runs in less 400 ms on a phone, we've identified some low ha
  
 # A discussion on accuracy
 
-We were able to test the accuracy of the detection on large datasets simply by taking video sequences of the same envelope, and analyzing large amounts of frames, as they all share the same ID-Tag.
-
-While the Solomon-Reed error correction code is very strong, it is not impossible for a false positive to occur in practice. Having tested on over 900 frames, no false positive we found, suggesting that the error detection mechanisms in place are sufficient.
-
-Although it is entire possible that new acquisition conditions emerge (e.g. old phone, no flashlight available on the phone, etc.) that increase the odds of misreading bars, and could sometimes lead to rare false positive. If such a situation happens, the simplest solution would be to force a "double check" step where the code is only returned once it has been read twice in a row with the same result. Our detection capture flow would adapt very well to this.
-
-
-
-
+We've estimated the following probabilities:
+ * Probability of a corrupted bit: 0.08% (measured)
+ * Probability of a false positive from the Solomon-Reed correction, knowing 2 bits are corrupted: ~1.2% (from simulation)
+ * Probability of two consecutive identical false positive: ~1 in 4 billion (estimated from numbers above)
  
  
