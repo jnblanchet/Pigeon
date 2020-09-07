@@ -19,19 +19,22 @@ function g = applyLookUpTable(f,lutx,luty)
                 y = W;
             end
             
-            x0 = floor(x);
-            y0 = floor(y);
-            x1 = x0+1;
-            y1 = y0+1;
+            x0 = round(x);
+            y0 = round(y);
+%             x1 = x0+1;
+%             y1 = y0+1;
+%             
+%             alpha = x1 - x;
+%             beta = x1 - x;
             
-            alpha = x1 - x;
-            beta = x1 - x;
+%             g(i,j,:) = ...
+%                 alpha * beta * f(x0,y0,:) + ...
+%                 alpha * (1-beta) * f(x0,y1,:) + ...
+%                 (1-alpha) * beta * f(x1,y0,:) + ...
+%                 (1-alpha) * (1-beta) * f(x1,y1,:);
             
-            g(i,j,:) = ...
-                alpha * beta * f(x0,y0,:) + ...
-                alpha * (1-beta) * f(x0,y1,:) + ...
-                (1-alpha) * beta * f(x1,y0,:) + ...
-                (1-alpha) * (1-beta) * f(x1,y1,:);
+            g(i,j,:) = f(x0,y0,:);
+
         end
     end
 
