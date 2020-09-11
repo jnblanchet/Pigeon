@@ -1,3 +1,5 @@
+Commercial usage of the source code or method is unauthorized. For commercial usage of the source code or the method, contact the author.
+
 # Pigeon app
 
 Submission for the d-Code CTT postal service competition 2020.
